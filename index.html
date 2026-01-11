@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DewPoint Sexy</title>
+
+  <!-- Tailwind & Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+  />
+
+  <!-- Fonts & Base Styles -->
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap");
+    body {
+      font-family: "Inter", sans-serif;
+      background: radial-gradient(circle at top, #1d4ed8 0, #020617 40%, #000000 100%);
+      color: #f8fafc;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+    .glass {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .neon {
+      text-shadow: 0 0 18px rgba(56, 189, 248, 0.9),
+        0 0 36px rgba(56, 189, 248, 0.6);
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(148, 163, 184, 0.4);
+      height: 6px;
+      border-radius: 9999px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      background: #38bdf8;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      background: #38bdf8;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center p-4">
+  <div class="max-w-3xl w-full glass rounded-3xl p-6 sm:p-8 shadow-2xl border border-cyan-500/30 relative overflow-hidden">
+    <!-- Glow orbs -->
+    <div class="pointer-events-none absolute -top-24 -right-24 w-64 h-64 rounded-full bg-cyan-500/20 blur-3xl"></div>
+    <div class="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl"></div>
+
+    <!-- Header -->
+    <div class="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-xs uppercase tracking-[0.2em] text-cyan-200">
+          <i class="fa-solid fa-droplet"></i>
+          <span>Dew Point Engine</span>
+        </div>
+        <h1 class="mt-3 text-3xl sm:text-4xl font-extrabold neon">
+          DewPoint <span class="text-cyan-400">Sexy</span>
+        </h1>
+        <p class="text-slate-300 text-sm sm:text-base mt-1">
+          Real-time dew point calculator for technicians. Plug in temp & humidity,
+          get instant dew point in °F.
+        </p>
+      </div>
+      <div class="flex flex-col items-end gap-1 text-xs text-right text-slate-400">
+        <span class="inline-flex items-center gap-1">
+          <i class="fa-solid fa-temperature-half text-orange-400"></i>
+          <span>Dry-bulb in °F</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <i class="fa-solid fa-water text-cyan-300"></i>
+          <span>Relative humidity in %</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Inputs -->
+    <div class="relative z-10 grid sm:grid-cols-2 gap-5 mb-6">
+      <!-- Temperature -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-300">
+          <span class="uppercase tracking-[0.2em] text-slate-400">Temperature</span>
+          <span id="temp-label" class="font-semibold text-cyan-300">75 °F</span>
+        </div>
+        <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
+          <i class="fa-solid fa-temperature-three-quarters text-orange-300 text-lg"></i>
+          <input
+            id="temp-input"
+            type="number"
+            value="75"
+            min="-40"
+            max="140"
+            step="0.1"
+            class="w-full bg-transparent outline-none text-slate-100 text-sm"
+          />
+          <span class="text-xs text-slate-400">°F</span>
+        </div>
+        <input id="temp-range" type="range" min="40" max="100" value="75" />
+      </div>
+
+      <!-- Humidity -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-300">
+          <span class="uppercase tracking-[0.2em] text-slate-400">Humidity</span>
+          <span id="rh-label" class="font-semibold text-cyan-300">50 %</span>
+        </div>
+        <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
+          <i class="fa-solid fa-droplet text-cyan-300 text-lg"></i>
+          <input
+            id="rh-input"
+            type="number"
+            value="50"
+            min="1"
+            max="100"
+            step="0.1"
+            class="w-full bg-transparent outline-none text-slate-100 text-sm"
+          />
+          <span class="text-xs text-slate-400">%</span>
+        </div>
+        <input id="rh-range" type="range" min="1" max="100" value="50" />
+      </div>
+    </div>
+
+    <!-- Main result -->
+    <div class="relative z-10 grid md:grid-cols-[3fr,2fr] gap-5 items-stretch">
+      <!-- Dew point card -->
+      <div class="rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 p-4 sm:p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
+              Dew Point
+            </span>
+            <span class="inline-flex items-center gap-1 text-[0.65rem] text-slate-400 bg-slate-900/80 px-2 py-1 rounded-full border border-slate-700/70">
+              <i class="fa-solid fa-gauge-high text-cyan-300"></i>
+              <span>Live update</span>
+            </span>
+          </div>
+          <div class="flex items-end gap-2">
+            <span id="dp-main" class="text-4xl sm:text-5xl font-extrabold text-cyan-300">
+              --
+            </span>
+            <span class="text-sm text-slate-400 mb-1">°F</span>
+          </div>
+          <p id="dp-comment" class="mt-2 text-xs sm:text-sm text-slate-300">
+            Adjust temperature and humidity to see dew point.
+          </p>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-3 text-xs">
+          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
+            <span class="text-slate-400 mb-1">Dew Point (°C)</span>
+            <span id="dp-c" class="text-lg font-semibold text-sky-300">--</span>
+          </div>
+          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
+            <span class="text-slate-400 mb-1">Spread (°F)</span>
+            <span id="dp-spread" class="text-lg font-semibold text-amber-300">--</span>
+          </div>
+          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
+            <span class="text-slate-400 mb-1">RH</span>
+            <span id="dp-rh" class="text-lg font-semibold text-emerald-300">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick ranges -->
+      <div class="rounded-2xl border border-slate-600/70 bg-slate-950/80 p-4 flex flex-col justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-3">
+            Condition Snapshot
+          </p>
+          <ul class="space-y-2 text-xs sm:text-[0.8rem]">
+            <li id="status-line" class="flex gap-2">
+              <span class="mt-0.5 text-cyan-300">
+                <i class="fa-solid fa-circle"></i>
+              </span>
+              <span class="text-slate-200">
+                Waiting for input...
+              </span>
+            </li>
+            <li class="flex gap-2">
+              <span class="mt-0.5 text-slate-400">
+                <i class="fa-solid fa-circle"></i>
+              </span>
+              <span class="text-slate-300">
+                Keep coil and surface temps above dew point to avoid condensation.
+              </span>
+            </li>
+            <li class="flex gap-2">
+              <span class="mt-0.5 text-slate-400">
+                <i class="fa-solid fa-circle"></i>
+              </span>
+              <span class="text-slate-300">
+                Narrow spread (°F) between temp and dew point means air is close to saturation.
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div class="mt-4 text-[0.7rem] text-slate-500 flex items-center justify-between">
+          <span>Built for field techs • DewPoint Sexy</span>
+          <span class="text-slate-500/70">
+            <i class="fa-solid fa-bolt"></i> Live calc
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIC -->
+  <script>
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function calcDewPointF(tempF, rh) {
+      const tempC = (tempF - 32) * (5 / 9);
+      const rhClamped = clamp(rh, 1, 100);
+
+      const a = 17.27;
+      const b = 237.7;
+      const gamma =
+        Math.log(rhClamped / 100) +
+        (a * tempC) / (b + tempC);
+
+      const dewC = (b * gamma) / (a - gamma);
+      const dewF = dewC * (9 / 5) + 32;
+
+      return { dewC, dewF };
+    }
+
+    const tempInput = document.getElementById("temp-input");
+    const tempRange = document.getElementById("temp-range");
+    const rhInput = document.getElementById("rh-input");
+    const rhRange = document.getElementById("rh-range");
+
+    const tempLabel = document.getElementById("temp-label");
+    const rhLabel = document.getElementById("rh-label");
+
+    const dpMain = document.getElementById("dp-main");
+    const dpCSpan = document.getElementById("dp-c");
+    const dpSpreadSpan = document.getElementById("dp-spread");
+    const dpRhSpan = document.getElementById("dp-rh");
+    const dpComment = document.getElementById("dp-comment");
+    const statusLine = document
+      .getElementById("status-line")
+      .querySelector("span:nth-child(2)");
+
+    function updateFromInputs() {
+      let t = parseFloat(tempInput.value);
+      let rh = parseFloat(rhInput.value);
+
+      if (isNaN(t)) t = 75;
+      if (isNaN(rh)) rh = 50;
+
+      t = clamp(t, -40, 140);
+      rh = clamp(rh, 1, 100);
+
+      tempInput.value = t.toFixed(1);
+      rhInput.value = rh.toFixed(1);
+
+      tempRange.value = clamp(
+        t,
+        parseFloat(tempRange.min),
+        parseFloat(tempRange.max)
+      );
+      rhRange.value = rh;
+
+      tempLabel.textContent = t.toFixed(1) + " °F";
+      rhLabel.textContent = rh.toFixed(1) + " %";
+
+      const { dewC, dewF } = calcDewPointF(t, rh);
+      const spread = t - dewF;
+
+      dpMain.textContent = dewF.toFixed(1);
+      dpCSpan.textContent = dewC.toFixed(1);
+      dpSpreadSpan.textContent = spread.toFixed(1);
+      dpRhSpan.textContent = rh.toFixed(1) + " %";
+
+      let comment = "";
+      if (spread < 3) {
+        comment = "Air is almost saturated — very high risk of condensation.";
+      } else if (spread < 7) {
+        comment = "Moist conditions — watch your coil and surface temps.";
+      } else if (spread < 12) {
+        comment = "Comfortable zone for most indoor conditions.";
+      } else {
+        comment = "Dry air — dew point well below space temperature.";
+      }
+      dpComment.textContent = comment;
+
+      statusLine.textContent =
+        "At " +
+        t.toFixed(1) +
+        " °F and " +
+        rh.toFixed(1) +
+        "% RH, dew point is " +
+        dewF.toFixed(1) +
+        " °F.";
+    }
+
+    tempInput.addEventListener("input", updateFromInputs);
+    rhInput.addEventListener("input", updateFromInputs);
+    tempRange.addEventListener("input", () => {
+      tempInput.value = tempRange.value;
+      updateFromInputs();
+    });
+    rhRange.addEventListener("input", () => {
+      rhInput.value = rhRange.value;
+      updateFromInputs();
+    });
+
+    updateFromInputs();
+  </script>
+</body>
+</html>
