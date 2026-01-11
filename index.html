@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DewPoint Calculator</title>
+  <title>DewPoint</title>
 
   <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -12,402 +12,487 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
   />
 
+  <!-- React + Babel (so we can use JSX without a build step) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
   <!-- Fonts & Base Styles -->
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap");
     body {
       font-family: "Inter", sans-serif;
-      background: radial-gradient(circle at top, #1d4ed8 0, #020617 40%, #000000 100%);
+      background-color: #0f172a;
       color: #f8fafc;
       overflow-x: hidden;
       min-height: 100vh;
     }
     .glass {
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(18px);
-      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
-    .neon {
-      text-shadow: 0 0 18px rgba(56, 189, 248, 0.9),
-        0 0 36px rgba(56, 189, 248, 0.6);
+    .glow-text {
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
     }
     input[type="range"] {
       -webkit-appearance: none;
-      appearance: none;
-      background: rgba(148, 163, 184, 0.4);
+      background: rgba(255, 255, 255, 0.1);
       height: 6px;
-      border-radius: 9999px;
+      border-radius: 5px;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      appearance: none;
       width: 18px;
       height: 18px;
       background: #38bdf8;
-      border-radius: 9999px;
+      border-radius: 50%;
       cursor: pointer;
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 18px;
-      height: 18px;
-      background: #38bdf8;
-      border-radius: 9999px;
-      cursor: pointer;
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
-    }
-
-    /* Fake “Quality Air” round logo */
-    .qa-logo {
-      width: 52px;
-      height: 52px;
-      border-radius: 9999px;
-      position: relative;
-      background: radial-gradient(circle at 30% 30%, #fefce8 0, #f97316 40%, #0f172a 85%);
-      box-shadow:
-        0 0 12px rgba(56, 189, 248, 0.4),
-        0 0 32px rgba(15, 23, 42, 0.9);
-      border: 2px solid rgba(148, 163, 184, 0.7);
-      overflow: hidden;
-    }
-    .qa-logo::before {
-      content: "";
-      position: absolute;
-      inset: 6px;
-      border-radius: 9999px;
-      border: 1px solid rgba(15, 23, 42, 0.6);
-      background: radial-gradient(circle at 20% 20%, #38bdf8 0, #0f172a 70%);
-      opacity: 0.9;
-    }
-    .qa-logo-icon {
-      position: relative;
-      z-index: 1;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
     }
   </style>
 </head>
-<body class="flex flex-col items-center justify-start p-4 gap-4">
+<body>
+  <div id="root"></div>
 
-  <!-- TOP BAR: QUALITY AIR + LOCAL OUTDOOR TEMP -->
-  <header class="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 px-1 sm:px-2">
-    <!-- Left: Logo + Text -->
-    <div class="flex items-center gap-3">
-      <div class="qa-logo flex items-center justify-center">
-        <i class="fa-solid fa-snowflake qa-logo-icon text-sky-100 text-xl"></i>
-      </div>
-      <div class="leading-tight">
-        <div class="text-xs tracking-[0.32em] text-slate-200 uppercase">
-          Quality Air
-        </div>
-        <div class="text-[0.7rem] text-slate-400 uppercase tracking-[0.22em]">
-          Heating &amp; Cooling
-        </div>
-      </div>
-    </div>
+  <!-- React app -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
 
-    <!-- Right: Local outdoor temp pill -->
-    <div
-      id="weather-pill"
-      class="hidden sm:flex flex-col items-end justify-center bg-slate-900/80 border border-slate-700/80 rounded-2xl px-4 py-2 shadow-lg min-w-[150px]"
-    >
-      <span class="text-[0.65rem] uppercase tracking-[0.22em] text-slate-400 mb-1">
-        Local Outdoor Temp
-      </span>
-      <div class="flex items-baseline gap-2">
-        <span id="weather-temp" class="text-xl font-semibold text-sky-300">--</span>
-        <span id="weather-unit" class="text-xs text-slate-300">°F</span>
-        <span id="weather-icon" class="text-sky-300 text-sm">
-          <i class="fa-solid fa-location-dot"></i>
-        </span>
-      </div>
-      <span id="weather-note" class="text-[0.65rem] text-slate-500 mt-1">
-        Detecting location…
-      </span>
-    </div>
-  </header>
+    // ==== Types/Enums (converted to JS) ====
+    const TemperatureUnit = {
+      CELSIUS: "C",
+      FAHRENHEIT: "F",
+    };
 
-  <!-- MAIN CARD -->
-  <div class="max-w-3xl w-full glass rounded-3xl p-6 sm:p-8 shadow-2xl border border-cyan-500/30 relative overflow-hidden mt-2">
-    <!-- Glow orbs -->
-    <div class="pointer-events-none absolute -top-24 -right-24 w-64 h-64 rounded-full bg-cyan-500/20 blur-3xl"></div>
-    <div class="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl"></div>
-
-    <!-- Header -->
-    <div class="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-      <div>
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-xs uppercase tracking-[0.2em] text-cyan-200">
-          <i class="fa-solid fa-droplet"></i>
-          <span>Dew Point Engine</span>
-        </div>
-        <h1 class="mt-3 text-3xl sm:text-4xl font-extrabold neon">
-          DEWPOINT<span class="text-cyan-400">.</span>
-        </h1>
-        <p class="text-slate-300 text-sm sm:text-base mt-1 uppercase tracking-[0.21em]">
-          Thermodynamic clarity
-        </p>
-      </div>
-      <div class="flex flex-col items-end gap-1 text-xs text-right text-slate-400">
-        <span class="inline-flex items-center gap-1">
-          <i class="fa-solid fa-temperature-half text-orange-400"></i>
-          <span>Dry-bulb in °F</span>
-        </span>
-        <span class="inline-flex items-center gap-1">
-          <i class="fa-solid fa-water text-cyan-300"></i>
-          <span>Relative humidity in %</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- Inputs -->
-    <div class="relative z-10 grid sm:grid-cols-2 gap-5 mb-6">
-      <div class="space-y-2">
-        <div class="flex items-center justify-between text-xs text-slate-300">
-          <span class="uppercase tracking-[0.2em] text-slate-400">Temperature</span>
-          <span id="temp-label" class="font-semibold text-cyan-300">75 °F</span>
-        </div>
-        <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
-          <i class="fa-solid fa-temperature-three-quarters text-orange-300 text-lg"></i>
-          <input id="temp-input" type="number" value="75" min="-40" max="140" step="0.1" class="w-full bg-transparent outline-none text-slate-100 text-sm"/>
-          <span class="text-xs text-slate-400">°F</span>
-        </div>
-        <input id="temp-range" type="range" min="40" max="100" value="75" />
-      </div>
-
-      <div class="space-y-2">
-        <div class="flex items-center justify-between text-xs text-slate-300">
-          <span class="uppercase tracking-[0.2em] text-slate-400">Humidity</span>
-          <span id="rh-label" class="font-semibold text-cyan-300">50 %</span>
-        </div>
-        <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
-          <i class="fa-solid fa-droplet text-cyan-300 text-lg"></i>
-          <input id="rh-input" type="number" value="50" min="1" max="100" step="0.1" class="w-full bg-transparent outline-none text-slate-100 text-sm"/>
-          <span class="text-xs text-slate-400">%</span>
-        </div>
-        <input id="rh-range" type="range" min="1" max="100" value="50" />
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div class="relative z-10 grid md:grid-cols-[3fr,2fr] gap-5 items-stretch">
-      <div class="rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 p-4 sm:p-5 flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
-              Calculated Dew Point
-            </span>
-            <span class="inline-flex items-center gap-1 text-[0.65rem] text-slate-400 bg-slate-900/80 px-2 py-1 rounded-full border border-slate-700/70">
-              <i class="fa-solid fa-gauge-high text-cyan-300"></i>
-              <span>Live update</span>
-            </span>
-          </div>
-          <div class="flex items-end gap-2">
-            <span id="dp-main" class="text-4xl sm:text-5xl font-extrabold text-cyan-300">--</span>
-            <span class="text-sm text-slate-400 mb-1">°F</span>
-          </div>
-          <p id="dp-comment" class="mt-2 text-xs sm:text-sm text-slate-300">
-            Adjust temperature and humidity to see dew point.
-          </p>
-        </div>
-        <div class="mt-4 grid grid-cols-3 gap-3 text-xs">
-          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
-            <span class="text-slate-400 mb-1">Dew Point (°C)</span>
-            <span id="dp-c" class="text-lg font-semibold text-sky-300">--</span>
-          </div>
-          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
-            <span class="text-slate-400 mb-1">Spread (°F)</span>
-            <span id="dp-spread" class="text-lg font-semibold text-amber-300">--</span>
-          </div>
-          <div class="flex flex-col bg-slate-900/70 rounded-xl px-3 py-2 border border-slate-700/80">
-            <span class="text-slate-400 mb-1">RH</span>
-            <span id="dp-rh" class="text-lg font-semibold text-emerald-300">--</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-2xl border border-slate-600/70 bg-slate-950/80 p-4 flex flex-col justify-between">
-        <div>
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-3">
-            Condition Snapshot
-          </p>
-          <ul class="space-y-2 text-xs sm:text-[0.8rem]">
-            <li id="status-line" class="flex gap-2">
-              <span class="mt-0.5 text-cyan-300"><i class="fa-solid fa-circle"></i></span>
-              <span class="text-slate-200">Waiting for input...</span>
-            </li>
-            <li class="flex gap-2">
-              <span class="mt-0.5 text-slate-400"><i class="fa-solid fa-circle"></i></span>
-              <span class="text-slate-300">Keep coil and surface temps above dew point to avoid condensation.</span>
-            </li>
-            <li class="flex gap-2">
-              <span class="mt-0.5 text-slate-400"><i class="fa-solid fa-circle"></i></span>
-              <span class="text-slate-300">Narrow spread (°F) means air is nearly saturated.</span>
-            </li>
-          </ul>
-        </div>
-        <div class="mt-4 text-[0.7rem] text-slate-500 flex items-center justify-between">
-          <span>Built for field techs • DewPoint Calculator</span>
-          <span class="text-slate-500/70"><i class="fa-solid fa-bolt"></i> Live calc</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- LOGIC -->
-  <script>
-    function clamp(value, min, max) {
-      return Math.min(Math.max(value, min), max);
+    // ==== Physics / Dewpoint helpers ====
+    function calculateDewPointCelsius(T, RH) {
+      const b = 17.67;
+      const c = 243.5;
+      const gamma = Math.log(RH / 100) + (b * T) / (c + T);
+      const dewPoint = (c * gamma) / (b - gamma);
+      return Math.round(dewPoint * 10) / 10;
     }
 
-    function calcDewPointF(tempF, rh) {
-      const tempC = (tempF - 32) * (5 / 9);
-      const rhClamped = clamp(rh, 1, 100);
-
-      const a = 17.27;
-      const b = 237.7;
-      const gamma =
-        Math.log(rhClamped / 100) +
-        (a * tempC) / (b + tempC);
-
-      const dewC = (b * gamma) / (a - gamma);
-      const dewF = dewC * (9 / 5) + 32;
-
-      return { dewC, dewF };
+    function celsiusToFahrenheit(c) {
+      return Math.round(((c * 9) / 5 + 32) * 10) / 10;
     }
 
-    const tempInput = document.getElementById("temp-input");
-    const tempRange = document.getElementById("temp-range");
-    const rhInput = document.getElementById("rh-input");
-    const rhRange = document.getElementById("rh-range");
+    function fahrenheitToCelsius(f) {
+      return Math.round(((f - 32) * 5) / 9 * 10) / 10;
+    }
 
-    const tempLabel = document.getElementById("temp-label");
-    const rhLabel = document.getElementById("rh-label");
+    function getComfortLevel(dewPointC) {
+      if (dewPointC < 10) return { label: "Dry & Crisp", color: "text-sky-400", level: 0 };
+      if (dewPointC < 15) return { label: "Pleasant", color: "text-emerald-400", level: 1 };
+      if (dewPointC < 18) return { label: "Comfortable", color: "text-teal-400", level: 2 };
+      if (dewPointC < 21) return { label: "Humid", color: "text-yellow-400", level: 3 };
+      if (dewPointC < 24) return { label: "Uncomfortable", color: "text-orange-500", level: 4 };
+      return { label: "Oppressive", color: "text-red-500", level: 5 };
+    }
 
-    const dpMain = document.getElementById("dp-main");
-    const dpCSpan = document.getElementById("dp-c");
-    const dpSpreadSpan = document.getElementById("dp-spread");
-    const dpRhSpan = document.getElementById("dp-rh");
-    const dpComment = document.getElementById("dp-comment");
-    const statusLineText = document
-      .querySelector("#status-line span:nth-child(2)");
-
-    function updateFromInputs() {
-      let t = parseFloat(tempInput.value);
-      let rh = parseFloat(rhInput.value);
-
-      if (isNaN(t)) t = 75;
-      if (isNaN(rh)) rh = 50;
-
-      t = clamp(t, -40, 140);
-      rh = clamp(rh, 1, 100);
-
-      tempInput.value = t.toFixed(1);
-      rhInput.value = rh.toFixed(1);
-
-      tempRange.value = clamp(
-        t,
-        parseFloat(tempRange.min),
-        parseFloat(tempRange.max)
-      );
-      rhRange.value = rh;
-
-      tempLabel.textContent = t.toFixed(1) + " °F";
-      rhLabel.textContent = rh.toFixed(1) + " %";
-
-      const { dewC, dewF } = calcDewPointF(t, rh);
-      const spread = t - dewF;
-
-      dpMain.textContent = dewF.toFixed(1);
-      dpCSpan.textContent = dewC.toFixed(1);
-      dpSpreadSpan.textContent = spread.toFixed(1);
-      dpRhSpan.textContent = rh.toFixed(1) + " %";
-
-      let comment = "";
-      if (spread < 3) {
-        comment = "Air is almost saturated — very high risk of condensation.";
-      } else if (spread < 7) {
-        comment = "Moist conditions — watch your coil and surface temps.";
-      } else if (spread < 12) {
-        comment = "Comfortable zone for most indoor conditions.";
-      } else {
-        comment = "Dry air — dew point well below space temperature.";
+    // Local "AI-style" description (no API key needed)
+    function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
+      const unitSymbol = "°" + unit;
+      if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
+        return `Cool, dry air that feels crisp and light at ${temp}${unitSymbol}.`;
       }
-      dpComment.textContent = comment;
-
-      statusLineText.textContent =
-        "At " +
-        t.toFixed(1) +
-        " °F and " +
-        rh.toFixed(1) +
-        "% RH, dew point is " +
-        dewF.toFixed(1) +
-        " °F.";
+      if (humidity < 45) {
+        return `Balanced air that feels clean and easy to breathe at ${temp}${unitSymbol}.`;
+      }
+      if (humidity < 60) {
+        return `Soft, mild humidity that wraps gently around your skin at ${temp}${unitSymbol}.`;
+      }
+      if (humidity < 75) {
+        return `Thick, warm air that clings lightly to your skin at ${temp}${unitSymbol}.`;
+      }
+      return `Heavy, saturated air that presses close against your skin at ${temp}${unitSymbol}.`;
     }
 
-    tempInput.addEventListener("input", updateFromInputs);
-    rhInput.addEventListener("input", updateFromInputs);
-    tempRange.addEventListener("input", () => {
-      tempInput.value = tempRange.value;
-      updateFromInputs();
-    });
-    rhRange.addEventListener("input", () => {
-      rhInput.value = rhRange.value;
-      updateFromInputs();
-    });
+    // ==== React App (from your App.tsx, adapted) ====
+    function App() {
+      const [state, setState] = useState({
+        temperature: 22,
+        humidity: 50,
+        unit: TemperatureUnit.CELSIUS,
+      });
 
-    updateFromInputs();
-
-    // Live local outdoor temperature (°F) using browser location + Open-Meteo
-    const weatherTemp = document.getElementById("weather-temp");
-    const weatherUnit = document.getElementById("weather-unit");
-    const weatherNote = document.getElementById("weather-note");
-    const weatherIcon = document.getElementById("weather-icon");
-
-    function setWeatherStatus(text) {
-      if (weatherNote) weatherNote.textContent = text;
-    }
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-
-          const url =
-            "https://api.open-meteo.com/v1/forecast?latitude=" +
-            lat +
-            "&longitude=" +
-            lon +
-            "&current=temperature_2m&temperature_unit=fahrenheit";
-
-          fetch(url)
-            .then((res) => res.json())
-            .then((data) => {
-              if (
-                data &&
-                data.current &&
-                typeof data.current.temperature_2m === "number"
-              ) {
-                const t = Math.round(data.current.temperature_2m);
-                if (weatherTemp) weatherTemp.textContent = t.toString();
-                if (weatherUnit) weatherUnit.textContent = "°F";
-                if (weatherIcon)
-                  weatherIcon.innerHTML =
-                    '<i class="fa-solid fa-cloud-sun"></i>';
-                setWeatherStatus("Using your approximate location.");
-              } else {
-                setWeatherStatus("Weather unavailable.");
-              }
-            })
-            .catch(() => {
-              setWeatherStatus("Weather unavailable.");
-            });
-        },
-        () => {
-          setWeatherStatus("Location blocked.");
-        }
+      const [aiText, setAiText] = useState(
+        "Adjust the sliders to feel the atmosphere..."
       );
-    } else {
-      setWeatherStatus("Geolocation not supported.");
+      const [loadingAi, setLoadingAi] = useState(false);
+      const [outdoorTemp, setOutdoorTemp] = useState(null);
+      const [outdoorLoading, setOutdoorLoading] = useState(false);
+
+      // Derived values
+      const currentTempC = useMemo(
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? state.temperature
+            : fahrenheitToCelsius(state.temperature),
+        [state.temperature, state.unit]
+      );
+
+      const dewPointC = useMemo(
+        () => calculateDewPointCelsius(currentTempC, state.humidity),
+        [currentTempC, state.humidity]
+      );
+
+      const dewPointDisplay = useMemo(
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? dewPointC
+            : celsiusToFahrenheit(dewPointC),
+        [dewPointC, state.unit]
+      );
+
+      const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
+
+      // Fetch outdoor temp (Open-Meteo)
+      useEffect(() => {
+        if ("geolocation" in navigator) {
+          setOutdoorLoading(true);
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              try {
+                const res = await fetch(
+                  `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+                );
+                const data = await res.json();
+                if (data.current_weather) {
+                  setOutdoorTemp(data.current_weather.temperature); // Celsius
+                }
+              } catch (err) {
+                console.error("Failed to fetch outdoor weather", err);
+              } finally {
+                setOutdoorLoading(false);
+              }
+            },
+            (err) => {
+              console.warn("Geolocation denied or failed", err);
+              setOutdoorLoading(false);
+            }
+          );
+        }
+      }, []);
+
+      const displayOutdoorTemp = useMemo(() => {
+        if (outdoorTemp === null) return null;
+        if (state.unit === TemperatureUnit.CELSIUS) {
+          return Math.round(outdoorTemp * 10) / 10;
+        }
+        return Math.round((outdoorTemp * 9 / 5 + 32) * 10) / 10;
+      }, [outdoorTemp, state.unit]);
+
+      // "AI" description (local function instead of Gemini API)
+      const fetchDescription = useCallback(async () => {
+        setLoadingAi(true);
+        const desc = generateAtmosphereDescription(
+          state.temperature,
+          state.humidity,
+          dewPointDisplay,
+          state.unit
+        );
+        // small delay just for feel
+        await new Promise((r) => setTimeout(r, 300));
+        setAiText(desc);
+        setLoadingAi(false);
+      }, [state.temperature, state.humidity, dewPointDisplay, state.unit]);
+
+      // Debounced description update
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          fetchDescription();
+        }, 800);
+        return () => clearTimeout(timer);
+      }, [fetchDescription]);
+
+      const toggleUnit = () => {
+        setState((prev) => ({
+          ...prev,
+          unit:
+            prev.unit === TemperatureUnit.CELSIUS
+              ? TemperatureUnit.FAHRENHEIT
+              : TemperatureUnit.CELSIUS,
+          temperature:
+            prev.unit === TemperatureUnit.CELSIUS
+              ? celsiusToFahrenheit(prev.temperature)
+              : fahrenheitToCelsius(prev.temperature),
+        }));
+      };
+
+      const updateTemp = (val) => {
+        setState((prev) => ({ ...prev, temperature: parseFloat(val) }));
+      };
+
+      const updateHumidity = (val) => {
+        setState((prev) => ({ ...prev, humidity: parseFloat(val) }));
+      };
+
+      const Logo = () => (
+        <div className="flex items-center gap-4">
+          <div className="relative w-16 h-16">
+            {/* SVG Recreation of the Logo Icon */}
+            <svg viewBox="0 0 100 100" className="w-full h-full">
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="rgba(56, 189, 248, 0.2)"
+                strokeWidth="2"
+              />
+              {/* Top blue arrow + segments */}
+              <path
+                d="M50 5 A45 45 0 0 1 95 50"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M15 50 A35 35 0 0 1 50 15"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M45 15 L50 10 L55 15"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M10 50 L15 45 L20 50"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+
+              {/* Bottom orange arc */}
+              <path
+                d="M15 50 A35 35 0 0 0 85 50"
+                fill="none"
+                stroke="#fb923c"
+                strokeWidth="6"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
+
+              {/* Snowflake center */}
+              <g transform="translate(50, 50) scale(0.6)">
+                <path
+                  d="M0 -30 L0 30 M-30 0 L30 0 M-21 -21 L21 21 M-21 21 L21 -21"
+                  stroke="#f8fafc"
+                  strokeWidth="4"
+                />
+              </g>
+            </svg>
+          </div>
+          <div className="flex flex-col leading-none">
+            <span className="text-3xl font-light tracking-widest text-white uppercase">
+              Quality Air
+            </span>
+            <span className="text-sm font-medium tracking-[0.2em] text-slate-500 uppercase">
+              Heating &amp; Cooling
+            </span>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen flex flex-col p-6 md:p-12 relative overflow-hidden">
+          {/* Background Animated Orbs */}
+          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px] animate-pulse delay-700"></div>
+
+          {/* Top Header Bar */}
+          <div className="w-full flex flex-col md:flex-row justify-between items-center mb-16 relative z-20 gap-8">
+            <Logo />
+
+            {/* Outdoor Temperature Widget */}
+            <div className="glass px-6 py-4 rounded-3xl flex flex-col items-end shadow-xl border-sky-500/10">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
+                Local Outdoor Temp
+              </span>
+              <div className="flex items-center gap-3">
+                {outdoorLoading ? (
+                  <div className="h-8 w-16 bg-white/5 animate-pulse rounded-lg"></div>
+                ) : displayOutdoorTemp !== null ? (
+                  <div className="text-3xl font-bold glow-text">
+                    {displayOutdoorTemp}
+                    <span className="text-sky-400">°</span>
+                    {state.unit}
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-600">Location required</span>
+                )}
+                <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <header className="mb-12 text-center relative z-10">
+              <h1 className="text-5xl md:text-8xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 mb-2">
+                DEWPOINT<span className="text-white">.</span>
+              </h1>
+              <p className="text-slate-400 font-light tracking-[0.5em] uppercase text-xs">
+                Thermodynamic Clarity
+              </p>
+            </header>
+
+            <main className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
+              {/* Left: Input Controls */}
+              <section className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col gap-10 shadow-2xl">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
+                        Ambient Temperature
+                      </label>
+                      <div className="text-5xl font-light">
+                        {state.temperature}
+                        <span className="text-sky-400">°</span>
+                        {state.unit}
+                      </div>
+                    </div>
+                    <button
+                      onClick={toggleUnit}
+                      className="bg-white/5 hover:bg-white/10 px-5 py-3 rounded-2xl text-xs font-bold transition-all border border-white/10 active:scale-95 shadow-lg"
+                    >
+                      Switch to °{state.unit === TemperatureUnit.CELSIUS ? "F" : "C"}
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={state.unit === TemperatureUnit.CELSIUS ? "-20" : "-4"}
+                    max={state.unit === TemperatureUnit.CELSIUS ? "50" : "122"}
+                    step="0.5"
+                    value={state.temperature}
+                    onChange={(e) => updateTemp(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
+                        Relative Humidity
+                      </label>
+                      <div className="text-5xl font-light">
+                        {state.humidity}
+                        <span className="text-sky-400">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={state.humidity}
+                    onChange={(e) => updateHumidity(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="mt-auto pt-8 border-t border-white/5">
+                  <div className="flex items-start gap-4 italic text-slate-300 min-h-[60px]">
+                    <i className="fa-solid fa-sparkles text-sky-400 mt-2 text-xl"></i>
+                    {loadingAi ? (
+                      <span className="animate-pulse text-lg">
+                        Reading the room…
+                      </span>
+                    ) : (
+                      <p className="text-xl leading-relaxed font-light">{aiText}</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Right: Results Display */}
+              <section className="flex flex-col gap-8">
+                <div className="glass p-10 md:p-14 rounded-[2.5rem] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                  <label className="text-xs font-bold uppercase tracking-[0.3em] text-slate-500 mb-6 z-10">
+                    Calculated Dew Point
+                  </label>
+                  <div className="text-[10rem] font-black leading-none glow-text z-10 transition-transform duration-700 group-hover:scale-110">
+                    {dewPointDisplay}
+                    <span className="text-5xl align-top mt-10 inline-block text-sky-400">
+                      °
+                    </span>
+                  </div>
+                  <div
+                    className={`mt-8 text-3xl font-bold z-10 ${comfort.color} flex items-center gap-4 uppercase tracking-tighter`}
+                  >
+                    <i
+                      className={`fa-solid ${
+                        comfort.level > 3 ? "fa-face-hot" : "fa-droplet"
+                      } animate-bounce`}
+                    ></i>
+                    {comfort.label}
+                  </div>
+                </div>
+
+                <div className="glass p-8 rounded-[2rem] grid grid-cols-2 gap-6">
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
+                    <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-2">
+                      Saturation Level
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-sky-400"
+                          style={{ width: state.humidity + "%" }}
+                        ></div>
+                      </div>
+                      <span className="text-xl font-bold">
+                        {state.humidity}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
+                    <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-2">
+                      Vapor Status
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <i
+                        className={`fa-solid fa-wind ${
+                          dewPointC > 20 ? "text-orange-400" : "text-sky-400"
+                        }`}
+                      ></i>
+                      <span className="text-xl font-bold">
+                        {dewPointC > 20 ? "Heavy" : "Light"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </main>
+          </div>
+
+          <footer className="mt-12 p-8 text-slate-600 text-[10px] tracking-widest uppercase text-center relative z-10 border-t border-white/5">
+            &copy; {new Date().getFullYear()} Aesthetic Engineering &bull; DewPoint • Local Tool
+          </footer>
+        </div>
+      );
     }
+
+    const rootElement = document.getElementById("root");
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
   </script>
 </body>
 </html>
