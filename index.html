@@ -56,14 +56,44 @@
       cursor: pointer;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
     }
+
+    /* Fake “Quality Air” round logo */
+    .qa-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 9999px;
+      position: relative;
+      background: radial-gradient(circle at 30% 30%, #fefce8 0, #f97316 40%, #0f172a 85%);
+      box-shadow:
+        0 0 12px rgba(56, 189, 248, 0.4),
+        0 0 32px rgba(15, 23, 42, 0.9);
+      border: 2px solid rgba(148, 163, 184, 0.7);
+      overflow: hidden;
+    }
+    .qa-logo::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 9999px;
+      border: 1px solid rgba(15, 23, 42, 0.6);
+      background: radial-gradient(circle at 20% 20%, #38bdf8 0, #0f172a 70%);
+      opacity: 0.9;
+    }
+    .qa-logo-icon {
+      position: relative;
+      z-index: 1;
+    }
   </style>
 </head>
 <body class="flex flex-col items-center justify-start p-4 gap-4">
 
-  <!-- QUALITY AIR HEADER BAR WITH REAL LOGO -->
+  <!-- TOP BAR: QUALITY AIR + LOCAL OUTDOOR TEMP -->
   <header class="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 px-1 sm:px-2">
+    <!-- Left: Logo + Text -->
     <div class="flex items-center gap-3">
-      <img src="logo.png" class="w-14 h-14 object-contain" />
+      <div class="qa-logo flex items-center justify-center">
+        <i class="fa-solid fa-snowflake qa-logo-icon text-sky-100 text-xl"></i>
+      </div>
       <div class="leading-tight">
         <div class="text-xs tracking-[0.32em] text-slate-200 uppercase">
           Quality Air
@@ -74,13 +104,23 @@
       </div>
     </div>
 
-    <div class="hidden sm:flex flex-col items-end text-[0.7rem] text-slate-400 gap-1">
-      <span class="uppercase tracking-[0.25em] text-slate-500">
-        DewPoint Calculator
+    <!-- Right: Local outdoor temp pill -->
+    <div
+      id="weather-pill"
+      class="hidden sm:flex flex-col items-end justify-center bg-slate-900/80 border border-slate-700/80 rounded-2xl px-4 py-2 shadow-lg min-w-[150px]"
+    >
+      <span class="text-[0.65rem] uppercase tracking-[0.22em] text-slate-400 mb-1">
+        Local Outdoor Temp
       </span>
-      <span class="inline-flex items-center gap-1 text-slate-300/80">
-        <i class="fa-solid fa-circle text-emerald-400 text-[0.55rem]"></i>
-        <span>Live field tool</span>
+      <div class="flex items-baseline gap-2">
+        <span id="weather-temp" class="text-xl font-semibold text-sky-300">--</span>
+        <span id="weather-unit" class="text-xs text-slate-300">°F</span>
+        <span id="weather-icon" class="text-sky-300 text-sm">
+          <i class="fa-solid fa-location-dot"></i>
+        </span>
+      </div>
+      <span id="weather-note" class="text-[0.65rem] text-slate-500 mt-1">
+        Detecting location…
       </span>
     </div>
   </header>
@@ -246,7 +286,8 @@
     const dpSpreadSpan = document.getElementById("dp-spread");
     const dpRhSpan = document.getElementById("dp-rh");
     const dpComment = document.getElementById("dp-comment");
-    const statusLine = document.getElementById("status-line").querySelector("span:nth-child(2)");
+    const statusLineText = document
+      .querySelector("#status-line span:nth-child(2)");
 
     function updateFromInputs() {
       let t = parseFloat(tempInput.value);
@@ -291,11 +332,10 @@
       }
       dpComment.textContent = comment;
 
-      statusLine.textContent =
+      statusLineText.textContent =
         "At " +
         t.toFixed(1) +
-        " °F +
-        " and " +
+        " °F and " +
         rh.toFixed(1) +
         "% RH, dew point is " +
         dewF.toFixed(1) +
@@ -314,6 +354,60 @@
     });
 
     updateFromInputs();
+
+    // Live local outdoor temperature (°F) using browser location + Open-Meteo
+    const weatherTemp = document.getElementById("weather-temp");
+    const weatherUnit = document.getElementById("weather-unit");
+    const weatherNote = document.getElementById("weather-note");
+    const weatherIcon = document.getElementById("weather-icon");
+
+    function setWeatherStatus(text) {
+      if (weatherNote) weatherNote.textContent = text;
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+
+          const url =
+            "https://api.open-meteo.com/v1/forecast?latitude=" +
+            lat +
+            "&longitude=" +
+            lon +
+            "&current=temperature_2m&temperature_unit=fahrenheit";
+
+          fetch(url)
+            .then((res) => res.json())
+            .then((data) => {
+              if (
+                data &&
+                data.current &&
+                typeof data.current.temperature_2m === "number"
+              ) {
+                const t = Math.round(data.current.temperature_2m);
+                if (weatherTemp) weatherTemp.textContent = t.toString();
+                if (weatherUnit) weatherUnit.textContent = "°F";
+                if (weatherIcon)
+                  weatherIcon.innerHTML =
+                    '<i class="fa-solid fa-cloud-sun"></i>';
+                setWeatherStatus("Using your approximate location.");
+              } else {
+                setWeatherStatus("Weather unavailable.");
+              }
+            })
+            .catch(() => {
+              setWeatherStatus("Weather unavailable.");
+            });
+        },
+        () => {
+          setWeatherStatus("Location blocked.");
+        }
+      );
+    } else {
+      setWeatherStatus("Geolocation not supported.");
+    }
   </script>
 </body>
 </html>
