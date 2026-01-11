@@ -58,8 +58,37 @@
     }
   </style>
 </head>
-<body class="flex items-center justify-center p-4">
-  <div class="max-w-3xl w-full glass rounded-3xl p-6 sm:p-8 shadow-2xl border border-cyan-500/30 relative overflow-hidden">
+<body class="flex flex-col items-center justify-start p-4 gap-4">
+
+  <!-- QUALITY AIR HEADER BAR -->
+  <header class="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 px-1 sm:px-2">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-400/60 flex items-center justify-center">
+        <i class="fa-solid fa-snowflake text-sky-300 text-xl"></i>
+      </div>
+      <div class="leading-tight">
+        <div class="text-xs tracking-[0.32em] text-slate-300 uppercase">
+          Quality Air
+        </div>
+        <div class="text-[0.7rem] text-slate-400 uppercase tracking-[0.22em]">
+          Heating &amp; Cooling
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden sm:flex flex-col items-end text-[0.7rem] text-slate-400 gap-1">
+      <span class="uppercase tracking-[0.25em] text-slate-500">
+        DewPoint Sexy
+      </span>
+      <span class="inline-flex items-center gap-1 text-slate-300/80">
+        <i class="fa-solid fa-circle text-emerald-400 text-[0.55rem]"></i>
+        <span>Live field tool</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- MAIN CARD -->
+  <div class="max-w-3xl w-full glass rounded-3xl p-6 sm:p-8 shadow-2xl border border-cyan-500/30 relative overflow-hidden mt-2">
     <!-- Glow orbs -->
     <div class="pointer-events-none absolute -top-24 -right-24 w-64 h-64 rounded-full bg-cyan-500/20 blur-3xl"></div>
     <div class="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl"></div>
@@ -72,11 +101,10 @@
           <span>Dew Point Engine</span>
         </div>
         <h1 class="mt-3 text-3xl sm:text-4xl font-extrabold neon">
-          DewPoint <span class="text-cyan-400">Sexy</span>
+          DEWPOINT<span class="text-cyan-400">.</span>
         </h1>
-        <p class="text-slate-300 text-sm sm:text-base mt-1">
-          Real-time dew point calculator for technicians. Plug in temp & humidity,
-          get instant dew point in °F.
+        <p class="text-slate-300 text-sm sm:text-base mt-1 uppercase tracking-[0.21em]">
+          Thermodynamic clarity
         </p>
       </div>
       <div class="flex flex-col items-end gap-1 text-xs text-right text-slate-400">
@@ -145,7 +173,7 @@
         <div>
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
-              Dew Point
+              Calculated Dew Point
             </span>
             <span class="inline-flex items-center gap-1 text-[0.65rem] text-slate-400 bg-slate-900/80 px-2 py-1 rounded-full border border-slate-700/70">
               <i class="fa-solid fa-gauge-high text-cyan-300"></i>
