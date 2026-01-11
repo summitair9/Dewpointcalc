@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DewPoint Sexy</title>
+  <title>DewPoint Calculator</title>
 
   <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -60,12 +60,10 @@
 </head>
 <body class="flex flex-col items-center justify-start p-4 gap-4">
 
-  <!-- QUALITY AIR HEADER BAR -->
+  <!-- QUALITY AIR HEADER BAR WITH LOGO -->
   <header class="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 px-1 sm:px-2">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-400/60 flex items-center justify-center">
-        <i class="fa-solid fa-snowflake text-sky-300 text-xl"></i>
-      </div>
+      <img src="logo.png" class="w-12 h-12 rounded-full border border-sky-400 shadow-md bg-white object-cover"/>
       <div class="leading-tight">
         <div class="text-xs tracking-[0.32em] text-slate-300 uppercase">
           Quality Air
@@ -78,7 +76,7 @@
 
     <div class="hidden sm:flex flex-col items-end text-[0.7rem] text-slate-400 gap-1">
       <span class="uppercase tracking-[0.25em] text-slate-500">
-        DewPoint Sexy
+        DewPoint Calculator
       </span>
       <span class="inline-flex items-center gap-1 text-slate-300/80">
         <i class="fa-solid fa-circle text-emerald-400 text-[0.55rem]"></i>
@@ -121,7 +119,6 @@
 
     <!-- Inputs -->
     <div class="relative z-10 grid sm:grid-cols-2 gap-5 mb-6">
-      <!-- Temperature -->
       <div class="space-y-2">
         <div class="flex items-center justify-between text-xs text-slate-300">
           <span class="uppercase tracking-[0.2em] text-slate-400">Temperature</span>
@@ -129,21 +126,12 @@
         </div>
         <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
           <i class="fa-solid fa-temperature-three-quarters text-orange-300 text-lg"></i>
-          <input
-            id="temp-input"
-            type="number"
-            value="75"
-            min="-40"
-            max="140"
-            step="0.1"
-            class="w-full bg-transparent outline-none text-slate-100 text-sm"
-          />
+          <input id="temp-input" type="number" value="75" min="-40" max="140" step="0.1" class="w-full bg-transparent outline-none text-slate-100 text-sm"/>
           <span class="text-xs text-slate-400">°F</span>
         </div>
         <input id="temp-range" type="range" min="40" max="100" value="75" />
       </div>
 
-      <!-- Humidity -->
       <div class="space-y-2">
         <div class="flex items-center justify-between text-xs text-slate-300">
           <span class="uppercase tracking-[0.2em] text-slate-400">Humidity</span>
@@ -151,24 +139,15 @@
         </div>
         <div class="flex items-center gap-3 bg-slate-900/70 rounded-2xl px-3 py-2 border border-slate-700/80">
           <i class="fa-solid fa-droplet text-cyan-300 text-lg"></i>
-          <input
-            id="rh-input"
-            type="number"
-            value="50"
-            min="1"
-            max="100"
-            step="0.1"
-            class="w-full bg-transparent outline-none text-slate-100 text-sm"
-          />
+          <input id="rh-input" type="number" value="50" min="1" max="100" step="0.1" class="w-full bg-transparent outline-none text-slate-100 text-sm"/>
           <span class="text-xs text-slate-400">%</span>
         </div>
         <input id="rh-range" type="range" min="1" max="100" value="50" />
       </div>
     </div>
 
-    <!-- Main result -->
+    <!-- Results -->
     <div class="relative z-10 grid md:grid-cols-[3fr,2fr] gap-5 items-stretch">
-      <!-- Dew point card -->
       <div class="rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 p-4 sm:p-5 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between mb-2">
@@ -181,9 +160,7 @@
             </span>
           </div>
           <div class="flex items-end gap-2">
-            <span id="dp-main" class="text-4xl sm:text-5xl font-extrabold text-cyan-300">
-              --
-            </span>
+            <span id="dp-main" class="text-4xl sm:text-5xl font-extrabold text-cyan-300">--</span>
             <span class="text-sm text-slate-400 mb-1">°F</span>
           </div>
           <p id="dp-comment" class="mt-2 text-xs sm:text-sm text-slate-300">
@@ -206,7 +183,6 @@
         </div>
       </div>
 
-      <!-- Quick ranges -->
       <div class="rounded-2xl border border-slate-600/70 bg-slate-950/80 p-4 flex flex-col justify-between">
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-3">
@@ -214,36 +190,22 @@
           </p>
           <ul class="space-y-2 text-xs sm:text-[0.8rem]">
             <li id="status-line" class="flex gap-2">
-              <span class="mt-0.5 text-cyan-300">
-                <i class="fa-solid fa-circle"></i>
-              </span>
-              <span class="text-slate-200">
-                Waiting for input...
-              </span>
+              <span class="mt-0.5 text-cyan-300"><i class="fa-solid fa-circle"></i></span>
+              <span class="text-slate-200">Waiting for input...</span>
             </li>
             <li class="flex gap-2">
-              <span class="mt-0.5 text-slate-400">
-                <i class="fa-solid fa-circle"></i>
-              </span>
-              <span class="text-slate-300">
-                Keep coil and surface temps above dew point to avoid condensation.
-              </span>
+              <span class="mt-0.5 text-slate-400"><i class="fa-solid fa-circle"></i></span>
+              <span class="text-slate-300">Keep coil and surface temps above dew point to avoid condensation.</span>
             </li>
             <li class="flex gap-2">
-              <span class="mt-0.5 text-slate-400">
-                <i class="fa-solid fa-circle"></i>
-              </span>
-              <span class="text-slate-300">
-                Narrow spread (°F) between temp and dew point means air is close to saturation.
-              </span>
+              <span class="mt-0.5 text-slate-400"><i class="fa-solid fa-circle"></i></span>
+              <span class="text-slate-300">Narrow spread (°F) means air is nearly saturated.</span>
             </li>
           </ul>
         </div>
         <div class="mt-4 text-[0.7rem] text-slate-500 flex items-center justify-between">
-          <span>Built for field techs • DewPoint Sexy</span>
-          <span class="text-slate-500/70">
-            <i class="fa-solid fa-bolt"></i> Live calc
-          </span>
+          <span>Built for field techs • DewPoint Calculator</span>
+          <span class="text-slate-500/70"><i class="fa-solid fa-bolt"></i> Live calc</span>
         </div>
       </div>
     </div>
@@ -284,9 +246,7 @@
     const dpSpreadSpan = document.getElementById("dp-spread");
     const dpRhSpan = document.getElementById("dp-rh");
     const dpComment = document.getElementById("dp-comment");
-    const statusLine = document
-      .getElementById("status-line")
-      .querySelector("span:nth-child(2)");
+    const statusLine = document.getElementById("status-line").querySelector("span:nth-child(2)");
 
     function updateFromInputs() {
       let t = parseFloat(tempInput.value);
