@@ -56,16 +56,45 @@
       cursor: pointer;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
     }
+
+    /* Fake “Quality Air” round logo */
+    .qa-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 9999px;
+      position: relative;
+      background: radial-gradient(circle at 30% 30%, #fefce8 0, #f97316 40%, #0f172a 85%);
+      box-shadow:
+        0 0 12px rgba(56, 189, 248, 0.4),
+        0 0 32px rgba(15, 23, 42, 0.9);
+      border: 2px solid rgba(148, 163, 184, 0.7);
+      overflow: hidden;
+    }
+    .qa-logo::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 9999px;
+      border: 1px solid rgba(15, 23, 42, 0.6);
+      background: radial-gradient(circle at 20% 20%, #38bdf8 0, #0f172a 70%);
+      opacity: 0.9;
+    }
+    .qa-logo-icon {
+      position: relative;
+      z-index: 1;
+    }
   </style>
 </head>
 <body class="flex flex-col items-center justify-start p-4 gap-4">
 
-  <!-- QUALITY AIR HEADER BAR WITH LOGO -->
+  <!-- QUALITY AIR HEADER BAR WITH DRAWN LOGO -->
   <header class="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 px-1 sm:px-2">
     <div class="flex items-center gap-3">
-      <img src="logo.png" class="w-12 h-12 rounded-full border border-sky-400 shadow-md bg-white object-cover"/>
+      <div class="qa-logo flex items-center justify-center">
+        <i class="fa-solid fa-snowflake qa-logo-icon text-sky-100 text-xl"></i>
+      </div>
       <div class="leading-tight">
-        <div class="text-xs tracking-[0.32em] text-slate-300 uppercase">
+        <div class="text-xs tracking-[0.32em] text-slate-200 uppercase">
           Quality Air
         </div>
         <div class="text-[0.7rem] text-slate-400 uppercase tracking-[0.22em]">
@@ -316,3 +345,4 @@
   </script>
 </body>
 </html>
+
