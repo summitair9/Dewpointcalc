@@ -330,7 +330,7 @@
         airflow.supplyStatic,
       ]);
 
-      // Primary focus suggestion based on ΔT + static
+      // Primary diagnostic focus (narrative)
       const primaryFocus = useMemo(() => {
         if (deltaTData.delta === null || airflowData.tesp === null) {
           return "Enter ΔT and static values to get a suggested focus.";
@@ -340,10 +340,10 @@
         const staticLabel = airflowData.statusLabel;
 
         if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static High") {
-          return "Focus on airflow restrictions: filter, coil, duct size, closed registers, balancing.";
+          return "Focus on airflow restrictions first: filter, coil, duct size, closed registers, balancing.";
         }
         if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static Normal") {
-          return "Focus on refrigerant charge and load: outdoor coil, metering device, charge, staging.";
+          return "Focus on refrigerant charge and load after basic airflow checks.";
         }
         if (dtLabel === "High" && staticLabel === "Static High") {
           return "Likely low airflow through the coil – expect high superheat, potential freeze risk.";
@@ -356,6 +356,72 @@
         }
         return "Numbers look generally OK – use checklist to confirm system health.";
       }, [deltaTData, airflowData]);
+
+      // Airflow verdict: is airflow likely THE issue or not?
+      const airflowVerdict = useMemo(() => {
+        if (deltaTData.delta === null || airflowData.tesp === null) {
+          return {
+            label: "Need More Data",
+            detail: "Enter ΔT and static (and design airflow) to evaluate airflow.",
+            color: "text-slate-300",
+          };
+        }
+
+        const designCfm = parseFloat(airflow.designCfm);
+        let airflowRatio = null;
+        if (airflowData.estCfm !== null && !isNaN(designCfm) && designCfm > 0) {
+          airflowRatio = airflowData.estCfm / designCfm;
+        }
+
+        const dtLabel = deltaTData.label;
+        const staticLabel = airflowData.statusLabel;
+
+        // Conditions where airflow is very likely a primary issue
+        const airflowLikelyBad =
+          (staticLabel === "Static High" || (airflowRatio !== null && airflowRatio < 0.8)) &&
+          (dtLabel === "Very Low" || dtLabel === "Low" || dtLabel === "High");
+
+        if (airflowLikelyBad) {
+          return {
+            label: "Airflow Likely Primary Issue",
+            detail:
+              "Static and ΔT suggest the coil is not seeing proper airflow. Treat airflow as the first suspect.",
+            color: "text-red-400",
+          };
+        }
+
+        // Conditions where airflow is probably OK and other causes are more likely
+        const dtOutOfRange = dtLabel === "Very Low" || dtLabel === "Low" || dtLabel === "High";
+        const staticNormalOrLow =
+          staticLabel === "Static Normal" || staticLabel === "Static Low";
+
+        if (dtOutOfRange && staticNormalOrLow && airflowRatio !== null && airflowRatio >= 0.9) {
+          return {
+            label: "Airflow Probably OK",
+            detail:
+              "Static and estimated CFM are close to design. Look harder at charge, load conditions, or system setup.",
+            color: "text-emerald-400",
+          };
+        }
+
+        // Everything in line
+        if (dtLabel === "In Range" && staticLabel === "Static Normal") {
+          return {
+            label: "Airflow Looks Healthy",
+            detail:
+              "ΔT and static both look normal. Airflow is unlikely to be the main issue based on these numbers.",
+            color: "text-sky-300",
+          };
+        }
+
+        // Fallback
+        return {
+          label: "Inconclusive",
+          detail:
+            "Airflow may be contributing, but numbers don’t clearly confirm or rule it out. Use the checklist and additional measurements.",
+          color: "text-amber-300",
+        };
+      }, [deltaTData, airflowData, airflow.designCfm]);
 
       // Fetch outdoor temp (Open-Meteo)
       useEffect(() => {
@@ -786,7 +852,7 @@
                   </p>
                 </div>
 
-                {/* ΔT Across Coil Helper + checklist */}
+                {/* ΔT Across Coil Helper + checklist + airflow verdict */}
                 <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -847,11 +913,27 @@
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/5 text-xs">
+                    {/* Airflow verdict */}
                     <div className="mb-2 text-slate-300">
-                      <span className="font-semibold text-slate-200">Primary focus: </span>
+                      <span className="font-semibold text-slate-200">
+                        Airflow verdict:&nbsp;
+                      </span>
+                      <span className={`${airflowVerdict.color} font-semibold`}>
+                        {airflowVerdict.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mb-3">
+                      {airflowVerdict.detail}
+                    </p>
+
+                    {/* Diagnostic focus */}
+                    <div className="mb-2 text-slate-300">
+                      <span className="font-semibold text-slate-200">Diagnostic focus: </span>
                       <span>{primaryFocus}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+
+                    {/* Checklist */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 mt-2">
                       <label className="inline-flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
