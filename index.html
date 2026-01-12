@@ -95,7 +95,7 @@
       return { label: "Oppressive", color: "text-red-500", level: 5 };
     }
 
-    // ==== Atmosphere description (no API) ====
+    // ==== Atmosphere description (local rules, no API) ====
     function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
       const unitSymbol = "°" + unit;
       if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
@@ -145,6 +145,8 @@
     }
 
     // ==== PT data (approx, 30–120°F) ====
+    // NOTE: We only load curves for a few common refrigerants.
+    // Other refrigerants are selectable but do NOT auto-convert.
     const PT_DATA = {
       "R-22": [
         { t: 30, p: 57.5 },
@@ -245,6 +247,35 @@
       }
       return null;
     }
+
+    // Large option list (many HVAC/R and replacements)
+    const PT_OPTIONS = [
+      "R-410A",
+      "R-22",
+      "R-407C",
+      "R-134a",
+      "R-404A",
+      "R-407A",
+      "R-407F",
+      "R-32",
+      "R-454B",
+      "R-452B",
+      "R-448A",
+      "R-449A",
+      "R-438A (MO99)",
+      "R-422D",
+      "R-421A",
+      "R-427A",
+      "R-513A",
+      "R-1234yf",
+      "R-1234ze",
+      "R-290 (Propane)",
+      "R-744 (CO2)",
+      "R-717 (Ammonia)",
+      "R-12",
+      "R-502",
+      "R-500",
+    ];
 
     function App() {
       // === MAIN ATMOSPHERE (DEFAULT IN °F) ===
@@ -847,7 +878,7 @@
           const p = ptPressureFromTemp(refName, temp);
           return {
             refrigerant: refName,
-            tempF: temp,
+            tempF: p === null ? "" : temp,
             pressure: p !== null ? p.toFixed(1) : "",
           };
         });
@@ -1830,11 +1861,15 @@
                         value={ptState.refrigerant}
                         onChange={(e) => handlePtRefChange(e.target.value)}
                       >
-                        <option value="R-410A">R-410A</option>
-                        <option value="R-22">R-22</option>
-                        <option value="R-407C">R-407C</option>
-                        <option value="R-134a">R-134a</option>
-                        <option value="R-404A">R-404A</option>
+                        {PT_OPTIONS.map((opt) => (
+                          <option
+                            key={opt}
+                            value={opt}
+                            className="bg-slate-900 text-slate-100"
+                          >
+                            {opt}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -1865,20 +1900,36 @@
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-slate-400 mt-2">
-                    {ptRange && (
+                  {ptRange ? (
+                    <div className="text-[11px] text-slate-400 mt-2">
                       <p>
                         Approx range for {ptState.refrigerant}:{" "}
                         {ptRange.minT}–{ptRange.maxT}
                         °F ≈ {ptRange.minP}–{ptRange.maxP} psig.
                       </p>
-                    )}
-                    <p className="mt-1">
-                      Values are approximate saturation points for quick field
-                      estimates. Always confirm with manufacturer PT charts for
-                      precise charging.
-                    </p>
-                  </div>
+                      <p className="mt-1">
+                        Values are approximate saturation points for quick field
+                        estimates. Always confirm with manufacturer PT charts
+                        for precise charging.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-amber-300 mt-2">
+                      <p>
+                        Auto PT curve not loaded for{" "}
+                        <span className="font-semibold">
+                          {ptState.refrigerant}
+                        </span>
+                        .
+                      </p>
+                      <p className="mt-1 text-slate-300">
+                        Use this selection as a label, but rely on the
+                        manufacturer PT chart or a dedicated PT app for exact
+                        pressure/temperature values. The fields above will not
+                        auto-convert for this refrigerant.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </section>
             </main>
