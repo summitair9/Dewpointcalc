@@ -109,7 +109,42 @@
       return `Heavy, saturated air that presses close against your skin at ${temp}${unitSymbol}.`;
     }
 
-    // ==== React App (from your App.tsx, adapted) ====
+    // DB/WB → RH → Dew point → Coil sat helper
+    function calcDbWbHelper(dbF, wbF) {
+      const db = parseFloat(dbF);
+      const wb = parseFloat(wbF);
+      if (isNaN(db) || isNaN(wb)) return null;
+      if (wb > db) return null;
+
+      // Convert °F to °C
+      const T = (db - 32) * (5 / 9);
+      const Tw = (wb - 32) * (5 / 9);
+
+      // Psychrometric approximation at ~standard pressure
+      const A = 0.00066 * 101.3; // kPa-ish factor
+      const esTw = 6.112 * Math.exp((17.67 * Tw) / (Tw + 243.5));
+      const e = esTw - A * (T - Tw);
+      const esT = 6.112 * Math.exp((17.67 * T) / (T + 243.5));
+      let RH = 100 * (e / esT);
+      RH = Math.max(0, Math.min(100, RH));
+
+      const dewC = calculateDewPointCelsius(T, RH);
+      const dewF = celsiusToFahrenheit(dewC);
+
+      // Simple rule-of-thumb evaporator saturation:
+      // about 15°F colder than entering air dewpoint, clamped to 32–55°F
+      let coilSatF = dewF - 15;
+      coilSatF = Math.max(32, Math.min(55, coilSatF));
+
+      return {
+        rh: RH,
+        dewC,
+        dewF,
+        coilSatF,
+      };
+    }
+
+    // ==== React App ====
     function App() {
       const [state, setState] = useState({
         temperature: 22,
@@ -123,6 +158,12 @@
       const [loadingAi, setLoadingAi] = useState(false);
       const [outdoorTemp, setOutdoorTemp] = useState(null);
       const [outdoorLoading, setOutdoorLoading] = useState(false);
+
+      // New: DB/WB helper state (always °F)
+      const [dbwb, setDbwb] = useState({
+        db: 75,
+        wb: 63,
+      });
 
       // Derived values
       const currentTempC = useMemo(
@@ -147,6 +188,12 @@
       );
 
       const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
+
+      // DB/WB helper derived results
+      const dbwbResults = useMemo(
+        () => calcDbWbHelper(dbwb.db, dbwb.wb),
+        [dbwb.db, dbwb.wb]
+      );
 
       // Fetch outdoor temp (Open-Meteo)
       useEffect(() => {
@@ -228,6 +275,13 @@
 
       const updateHumidity = (val) => {
         setState((prev) => ({ ...prev, humidity: parseFloat(val) }));
+      };
+
+      const updateDbwbField = (field, val) => {
+        setDbwb((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
       };
 
       const Logo = () => (
@@ -475,12 +529,85 @@
                     </div>
                   </div>
                 </div>
+
+                {/* NEW: Evap Coil Saturation Helper */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Evap Coil Target (DB/WB)
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Entering air DB / WB in °F. Uses simple field rule-of-thumb.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-snowflake text-sky-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Entering Dry-Bulb (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={dbwb.db}
+                        onChange={(e) => updateDbwbField("db", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Entering Wet-Bulb (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={dbwb.wb}
+                        onChange={(e) => updateDbwbField("wb", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mt-2 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Entering RH
+                      </span>
+                      <span className="text-lg font-semibold text-sky-300">
+                        {dbwbResults ? Math.round(dbwbResults.rh) + "%" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Dew Point (°F)
+                      </span>
+                      <span className="text-lg font-semibold text-emerald-300">
+                        {dbwbResults ? dbwbResults.dewF.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Est. Evap Sat (°F)
+                      </span>
+                      <span className="text-lg font-semibold text-amber-300">
+                        {dbwbResults ? dbwbResults.coilSatF.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Approximate only – coil saturation varies by system design, airflow, and load.
+                  </p>
+                </div>
               </section>
             </main>
           </div>
 
           <footer className="mt-12 p-8 text-slate-600 text-[10px] tracking-widest uppercase text-center relative z-10 border-t border-white/5">
-            &copy; {new Date().getFullYear()} Aesthetic Engineering &bull; DewPoint • Local Tool
+            &copy; {new Date().getFullYear()} Aesthetic Engineering &bull; DewPoint • Field Tool
           </footer>
         </div>
       );
