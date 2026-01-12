@@ -99,18 +99,18 @@
     function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
       const unitSymbol = "°" + unit;
       if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
-        return `Cool, dry air that feels crisp and light at ${temp}${unitSymbol}.`;
+        return \`Cool, dry air that feels crisp and light at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 45) {
-        return `Balanced air that feels clean and easy to breathe at ${temp}${unitSymbol}.`;
+        return \`Balanced air that feels clean and easy to breathe at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 60) {
-        return `Soft, mild humidity that wraps gently around your skin at ${temp}${unitSymbol}.`;
+        return \`Soft, mild humidity that wraps gently around your skin at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 75) {
-        return `Thick, warm air that clings lightly to your skin at ${temp}${unitSymbol}.`;
+        return \`Thick, warm air that clings lightly to your skin at \${temp}\${unitSymbol}.\`;
       }
-      return `Heavy, saturated air that presses close against your skin at ${temp}${unitSymbol}.`;
+      return \`Heavy, saturated air that presses close against your skin at \${temp}\${unitSymbol}.\`;
     }
 
     // ==== DB/WB helper ====
@@ -365,7 +365,7 @@
         try {
           setOutdoorLoading(true);
           const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+            \`https://api.open-meteo.com/v1/forecast?latitude=\${latitude}&longitude=\${longitude}&current_weather=true\`
           );
           const data = await res.json();
           if (data.current_weather) {
@@ -1101,9 +1101,11 @@
           {/* Header */}
           <div className="w-full flex flex-col md:flex-row justify-between items-center mb-16 relative z-20 gap-8">
             <Logo />
-            <div className="flex flex-col md:flex-row items-stretch gap-4">
+
+            {/* Make this container relative so menus can stack correctly */}
+            <div className="flex flex-col md:flex-row items-stretch gap-4 relative z-20">
               {/* Outdoor widget with location menu */}
-              <div className="glass px-6 py-4 rounded-3xl flex flex-col items-end shadow-xl border-sky-500/10 relative">
+              <div className="glass px-6 py-4 rounded-3xl flex flex-col items-end shadow-xl border-sky-500/10 relative z-30">
                 <button
                   type="button"
                   onClick={() => setShowLocationMenu((v) => !v)}
@@ -1117,7 +1119,7 @@
                   <i className="fa-solid fa-caret-down text-slate-500 text-[9px]"></i>
                 </button>
                 {showLocationMenu && (
-                  <div className="absolute top-full left-0 mt-2 glass rounded-2xl p-3 w-44 shadow-xl z-50">
+                  <div className="absolute top-full right-0 mt-2 glass rounded-2xl p-3 w-44 shadow-xl z-50">
                     {allLocations.map((loc) => (
                       <button
                         key={loc.key}
@@ -1151,7 +1153,7 @@
               </div>
 
               {/* Jump-to-card dropdown */}
-              <div className="glass px-4 py-3 rounded-3xl flex flex-col justify-center shadow-xl border-sky-500/10">
+              <div className="glass px-4 py-3 rounded-3xl flex flex-col justify-center shadow-xl border-sky-500/10 relative z-10">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
                   Jump to Card
                 </span>
