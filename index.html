@@ -165,6 +165,12 @@
         wb: 63,
       });
 
+      // New: ΔT helper state (°F)
+      const [dt, setDt] = useState({
+        returnDb: 75,
+        supplyDb: 55,
+      });
+
       // Derived values
       const currentTempC = useMemo(
         () =>
@@ -194,6 +200,38 @@
         () => calcDbWbHelper(dbwb.db, dbwb.wb),
         [dbwb.db, dbwb.wb]
       );
+
+      // ΔT derived
+      const deltaTData = useMemo(() => {
+        const r = parseFloat(dt.returnDb);
+        const s = parseFloat(dt.supplyDb);
+        if (isNaN(r) || isNaN(s)) return { delta: null, label: "--", note: "Enter return & supply temps.", color: "text-slate-300" };
+
+        const d = r - s;
+        let label = "";
+        let note = "";
+        let color = "";
+
+        if (d < 8) {
+          label = "Very Low";
+          note = "Check charge / airflow – coil barely cooling.";
+          color = "text-red-400";
+        } else if (d < 14) {
+          label = "Low";
+          note = "Below typical range – verify charge & airflow.";
+          color = "text-amber-400";
+        } else if (d <= 22) {
+          label = "In Range";
+          note = "Within common comfort-cooling ΔT window.";
+          color = "text-emerald-400";
+        } else {
+          label = "High";
+          note = "High ΔT – can indicate low airflow or other issues.";
+          color = "text-orange-400";
+        }
+
+        return { delta: d, label, note, color };
+      }, [dt.returnDb, dt.supplyDb]);
 
       // Fetch outdoor temp (Open-Meteo)
       useEffect(() => {
@@ -279,6 +317,13 @@
 
       const updateDbwbField = (field, val) => {
         setDbwb((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateDtField = (field, val) => {
+        setDt((prev) => ({
           ...prev,
           [field]: val === "" ? "" : parseFloat(val),
         }));
@@ -470,7 +515,7 @@
                 </div>
               </section>
 
-              {/* Right: Results Display */}
+              {/* Right: Results & Tools */}
               <section className="flex flex-col gap-8">
                 <div className="glass p-10 md:p-14 rounded-[2.5rem] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden group">
                   <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -530,7 +575,7 @@
                   </div>
                 </div>
 
-                {/* NEW: Evap Coil Saturation Helper */}
+                {/* Evap Coil Saturation Helper */}
                 <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -601,6 +646,67 @@
                   <p className="text-[10px] text-slate-500 mt-1">
                     Approximate only – coil saturation varies by system design, airflow, and load.
                   </p>
+                </div>
+
+                {/* ΔT Across Coil Helper */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        ΔT Across Coil (Return / Supply)
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Return and supply dry-bulb in °F. Typical comfort-cooling ΔT is roughly 16–22°F.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-temperature-half text-amber-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Return Air DB (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                        value={dt.returnDb}
+                        onChange={(e) => updateDtField("returnDb", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Supply Air DB (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                        value={dt.supplyDb}
+                        onChange={(e) => updateDtField("supplyDb", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <div>
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        ΔT (Return − Supply)
+                      </span>
+                      <span className="text-3xl font-bold text-amber-200">
+                        {deltaTData.delta !== null ? deltaTData.delta.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`block text-xs font-bold uppercase tracking-wide ${deltaTData.color}`}>
+                        {deltaTData.label}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 mt-1 max-w-[220px]">
+                        {deltaTData.note}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </section>
             </main>
