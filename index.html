@@ -99,18 +99,18 @@
     function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
       const unitSymbol = "°" + unit;
       if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
-        return `Cool, dry air that feels crisp and light at ${temp}${unitSymbol}.`;
+        return \`Cool, dry air that feels crisp and light at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 45) {
-        return `Balanced air that feels clean and easy to breathe at ${temp}${unitSymbol}.`;
+        return \`Balanced air that feels clean and easy to breathe at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 60) {
-        return `Soft, mild humidity that wraps gently around your skin at ${temp}${unitSymbol}.`;
+        return \`Soft, mild humidity that wraps gently around your skin at \${temp}\${unitSymbol}.\`;
       }
       if (humidity < 75) {
-        return `Thick, warm air that clings lightly to your skin at ${temp}${unitSymbol}.`;
+        return \`Thick, warm air that clings lightly to your skin at \${temp}\${unitSymbol}.\`;
       }
-      return `Heavy, saturated air that presses close against your skin at ${temp}${unitSymbol}.`;
+      return \`Heavy, saturated air that presses close against your skin at \${temp}\${unitSymbol}.\`;
     }
 
     // ==== DB/WB helper ====
@@ -175,7 +175,7 @@
         { t: 40, p: 61.7 },
         { t: 50, p: 77.1 },
         { t: 60, p: 94.3 },
-        { t: 70, p: 138.5 }, // near mid table
+        { t: 70, p: 138.5 },
         { t: 80, p: 163.5 },
         { t: 90, p: 191.3 },
         { t: 100, p: 222.3 },
@@ -336,7 +336,7 @@
         try {
           setOutdoorLoading(true);
           const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+            \`https://api.open-meteo.com/v1/forecast?latitude=\${latitude}&longitude=\${longitude}&current_weather=true\`
           );
           const data = await res.json();
           if (data.current_weather) {
@@ -1088,7 +1088,7 @@
                   <i className="fa-solid fa-caret-down text-slate-500 text-[9px]"></i>
                 </button>
                 {showLocationMenu && (
-                  <div className="absolute top-full right-0 mt-2 glass rounded-2xl p-3 w-44 shadow-xl z-30">
+                  <div className="absolute top-full left-0 mt-2 glass rounded-2xl p-3 w-44 shadow-xl z-50">
                     {allLocations.map((loc) => (
                       <button
                         key={loc.key}
