@@ -55,139 +55,1372 @@
 <body>
   <div id="root"></div>
 
-  <!-- REACT APPLICATION -->
+  <!-- REACT APP -->
   <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
 
-    const TemperatureUnit = { CELSIUS: "C", FAHRENHEIT: "F" };
+    // ==== Units ====
+    const TemperatureUnit = {
+      CELSIUS: "C",
+      FAHRENHEIT: "F",
+    };
 
-    /* ---- Conversions ---- */
-    const c2f = c => Math.round(((c * 9) / 5 + 32) * 10) / 10;
-    const f2c = f => Math.round(((f - 32) * 5) / 9 * 10) / 10;
-
-    /* ---- Dewpoint ---- */
-    function dewpointC(T, RH) {
-      const b = 17.67, c = 243.5;
-      const g = Math.log(RH / 100) + (b * T) / (c + T);
-      return Math.round(((c * g) / (b - g)) * 10) / 10;
+    // ==== Conversions ====
+    function celsiusToFahrenheit(c) {
+      return Math.round(((c * 9) / 5 + 32) * 10) / 10;
+    }
+    function fahrenheitToCelsius(f) {
+      return Math.round(((f - 32) * 5) / 9 * 10) / 10;
     }
 
-    /* ---- Comfort bands ---- */
-    function comfort(dewC) {
-      if (dewC < 10) return { label:'Dry & Crisp', color:'text-sky-400', level:0 };
-      if (dewC < 15) return { label:'Pleasant', color:'text-emerald-400', level:1 };
-      if (dewC < 18) return { label:'Comfortable', color:'text-teal-400', level:2 };
-      if (dewC < 21) return { label:'Humid', color:'text-yellow-400', level:3 };
-      if (dewC < 24) return { label:'Uncomfortable', color:'text-orange-500', level:4 };
-      return { label:'Oppressive', color:'text-red-500', level:5 };
+    // ==== Dew Point (Magnus) ====
+    function calculateDewPointCelsius(T, RH) {
+      const b = 17.67;
+      const c = 243.5;
+      const gamma = Math.log(RH / 100) + (b * T) / (c + T);
+      const dewPoint = (c * gamma) / (b - gamma);
+      return Math.round(dewPoint * 10) / 10;
     }
 
-    /* ---- Simple AI-ish wording ---- */
-    function describe(temp, hum, dew, unit) {
-      const u="°"+unit;
-      if(hum<30) return `Crisp, dry air at ${temp}${u}.`;
-      if(hum<45) return `Clean and balanced air around ${temp}${u}.`;
-      if(hum<60) return `Soft humidity wraps at ${temp}${u}.`;
-      if(hum<75) return `Warm, clinging air at ${temp}${u}.`;
-      return `Heavy, saturated air pressing at ${temp}${u}.`;
+    // ==== Comfort text ====
+    function getComfortLevel(dewPointC) {
+      if (dewPointC < 10) return { label: "Dry & Crisp", color: "text-sky-400", level: 0 };
+      if (dewPointC < 15) return { label: "Pleasant", color: "text-emerald-400", level: 1 };
+      if (dewPointC < 18) return { label: "Comfortable", color: "text-teal-400", level: 2 };
+      if (dewPointC < 21) return { label: "Humid", color: "text-yellow-400", level: 3 };
+      if (dewPointC < 24) return { label: "Uncomfortable", color: "text-orange-500", level: 4 };
+      return { label: "Oppressive", color: "text-red-500", level: 5 };
     }
 
-    /* ---- DB/WB to RH & evap SAT ---- */
-    function dbwb(db, wb) {
-      const D=parseFloat(db), W=parseFloat(wb);
-      if(isNaN(D)||isNaN(W)||W>D) return null;
-      const T=(D-32)*(5/9), Tw=(W-32)*(5/9);
-      const A=0.00066*101.3;
-      const esTw=6.112*Math.exp((17.67*Tw)/(Tw+243.5));
-      const e=esTw-A*(T-Tw);
-      const esT=6.112*Math.exp((17.67*T)/(T+243.5));
-      const RH=Math.max(0,Math.min(100,100*(e/esT)));
-      const dC=dewpointC(T,RH), dF=c2f(dC);
-      let coil=dF-15; coil=Math.max(32,Math.min(55,coil));
-      return {rh:RH, dewC:dC, dewF:dF, coilF:coil};
+    // ==== Atmosphere “AI-ish” description (no API) ====
+    function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
+      const unitSymbol = "°" + unit;
+      if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
+        return `Cool, dry air that feels crisp and light at ${temp}${unitSymbol}.`;
+      }
+      if (humidity < 45) {
+        return `Balanced air that feels clean and easy to breathe at ${temp}${unitSymbol}.`;
+      }
+      if (humidity < 60) {
+        return `Soft, mild humidity that wraps gently around your skin at ${temp}${unitSymbol}.`;
+      }
+      if (humidity < 75) {
+        return `Thick, warm air that clings lightly to your skin at ${temp}${unitSymbol}.`;
+      }
+      return `Heavy, saturated air that presses close against your skin at ${temp}${unitSymbol}.`;
     }
 
-    function App(){
-      /* ---- DEFAULTS now Fahrenheit ---- */
-      const [unit,setUnit]=useState(TemperatureUnit.FAHRENHEIT);
-      const [tempF,setTempF]=useState(72);
-      const [rh,setRh]=useState(50);
+    // ==== DB/WB helper ====
+    function calcDbWbHelper(dbF, wbF) {
+      const db = parseFloat(dbF);
+      const wb = parseFloat(wbF);
+      if (isNaN(db) || isNaN(wb)) return null;
+      if (wb > db) return null;
 
-      const tempC = useMemo(()=>unit==="F"?f2c(tempF):tempF,[unit,tempF]);
-      const dewC  = useMemo(()=>dewpointC(tempC,rh),[tempC,rh]);
-      const dewOut=unit==="F"?c2f(dewC):dewC;
-      const com=comfort(dewC);
+      const T = (db - 32) * (5 / 9);
+      const Tw = (wb - 32) * (5 / 9);
 
-      const [txt,setTxt]=useState("Adjust fields…");
-      const [load,setLoad]=useState(false);
+      const A = 0.00066 * 101.3;
+      const esTw = 6.112 * Math.exp((17.67 * Tw) / (Tw + 243.5));
+      const e = esTw - A * (T - Tw);
+      const esT = 6.112 * Math.exp((17.67 * T) / (T + 243.5));
+      let RH = 100 * (e / esT);
+      RH = Math.max(0, Math.min(100, RH));
 
-      const getOut=(t,h,d)=>describe(t,h,d,unit);
+      const dewC = calculateDewPointCelsius(T, RH);
+      const dewF = celsiusToFahrenheit(dewC);
 
-      useEffect(()=>{
-        setLoad(true);
-        const tm=setTimeout(()=>{
-          setTxt(getOut(tempF,rh,dewOut));
-          setLoad(false);
-        },300);
-        return()=>clearTimeout(tm);
-      },[tempF,rh,unit]);
+      let coilSatF = dewF - 15;
+      coilSatF = Math.max(32, Math.min(55, coilSatF));
 
-      const switchUnit=()=> {
-        if(unit==="F"){ setUnit("C"); setTempF(f2c(tempF)); }
-        else{ setUnit("F"); setTempF(c2f(tempC)); }
+      return {
+        rh: RH,
+        dewC,
+        dewF,
+        coilSatF,
+      };
+    }
+
+    function App() {
+      // === MAIN ATMOSPHERE (DEFAULT IN °F) ===
+      const [state, setState] = useState({
+        temperature: 72,            // default 72°F
+        humidity: 50,
+        unit: TemperatureUnit.FAHRENHEIT,  // default Fahrenheit
+      });
+
+      const [aiText, setAiText] = useState(
+        "Adjust the sliders to feel the atmosphere..."
+      );
+      const [loadingAi, setLoadingAi] = useState(false);
+      const [outdoorTemp, setOutdoorTemp] = useState(null); // °C from API
+      const [outdoorLoading, setOutdoorLoading] = useState(false);
+
+      // DB/WB helper state (always °F)
+      const [dbwb, setDbwb] = useState({
+        db: 75,
+        wb: 63,
+      });
+
+      // ΔT helper state (°F)
+      const [dt, setDt] = useState({
+        returnDb: 75,
+        supplyDb: 55,
+      });
+
+      // Airflow / static state
+      const [airflow, setAirflow] = useState({
+        designCfm: 400,
+        designStatic: 0.5,
+        returnStatic: 0.08,
+        supplyStatic: 0.22,
+      });
+
+      // Refrigerant circuit state (superheat / subcool) °F
+      const [refrig, setRefrig] = useState({
+        evapSat: 40,
+        suctionLine: 55,
+        condSat: 110,
+        liquidLine: 95,
+      });
+
+      // Checklist
+      const [checks, setChecks] = useState({
+        filter: false,
+        coil: false,
+        blower: false,
+        charge: false,
+        ducts: false,
+      });
+
+      // ==== Derived main atmosphere ====
+      const currentTempC = useMemo(
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? state.temperature
+            : fahrenheitToCelsius(state.temperature),
+        [state.temperature, state.unit]
+      );
+
+      const dewPointC = useMemo(
+        () => calculateDewPointCelsius(currentTempC, state.humidity),
+        [currentTempC, state.humidity]
+      );
+
+      const dewPointDisplay = useMemo(
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? dewPointC
+            : celsiusToFahrenheit(dewPointC),
+        [dewPointC, state.unit]
+      );
+
+      const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
+
+      // ==== DB/WB ====
+      const dbwbResults = useMemo(
+        () => calcDbWbHelper(dbwb.db, dbwb.wb),
+        [dbwb.db, dbwb.wb]
+      );
+
+      // ==== ΔT across coil ====
+      const deltaTData = useMemo(() => {
+        const r = parseFloat(dt.returnDb);
+        const s = parseFloat(dt.supplyDb);
+        if (isNaN(r) || isNaN(s)) {
+          return {
+            delta: null,
+            label: "--",
+            note: "Enter return & supply temps.",
+            color: "text-slate-300",
+          };
+        }
+
+        const d = r - s;
+        let label = "";
+        let note = "";
+        let color = "";
+
+        if (d < 8) {
+          label = "Very Low";
+          note = "ΔT far below typical. Check airflow first, then charge and load.";
+          color = "text-red-400";
+        } else if (d < 14) {
+          label = "Low";
+          note = "Below typical range – verify airflow and refrigerant charge.";
+          color = "text-amber-400";
+        } else if (d <= 22) {
+          label = "In Range";
+          note = "Within common comfort-cooling ΔT window.";
+          color = "text-emerald-400";
+        } else {
+          label = "High";
+          note = "High ΔT – often points to low airflow or very low load.";
+          color = "text-orange-400";
+        }
+
+        return { delta: d, label, note, color };
+      }, [dt.returnDb, dt.supplyDb]);
+
+      // ==== Airflow / static ====
+      const airflowData = useMemo(() => {
+        const designCfm = parseFloat(airflow.designCfm);
+        const designStatic = parseFloat(airflow.designStatic);
+        const rs = parseFloat(airflow.returnStatic);
+        const ss = parseFloat(airflow.supplyStatic);
+
+        if (
+          isNaN(designCfm) ||
+          designCfm <= 0 ||
+          isNaN(designStatic) ||
+          designStatic <= 0 ||
+          isNaN(rs) ||
+          isNaN(ss)
+        ) {
+          return {
+            tesp: null,
+            estCfm: null,
+            statusLabel: "--",
+            statusNote: "Enter design airflow and static with measured return/supply.",
+            statusColor: "text-slate-300",
+          };
+        }
+
+        const tesp = Math.abs(rs) + Math.abs(ss);
+
+        let estCfm = null;
+        if (tesp > 0.05) {
+          const ratio = Math.sqrt(designStatic / tesp);
+          estCfm = designCfm * ratio;
+          const minCfm = designCfm * 0.5;
+          const maxCfm = designCfm * 1.5;
+          estCfm = Math.max(minCfm, Math.min(maxCfm, estCfm));
+        }
+
+        let statusLabel = "";
+        let statusNote = "";
+        let statusColor = "";
+
+        if (tesp < designStatic * 0.7) {
+          statusLabel = "Static Low";
+          statusNote =
+            "Total external static is below expected – could be low resistance duct system or low airflow setting.";
+          statusColor = "text-sky-300";
+        } else if (tesp <= designStatic * 1.2) {
+          statusLabel = "Static Normal";
+          statusNote =
+            "Static near design – airflow likely close to expected if blower setup is correct.";
+          statusColor = "text-emerald-400";
+        } else {
+          statusLabel = "Static High";
+          statusNote =
+            "Static above design – restrictions, undersized duct, closed registers, dirty filter/coil.";
+          statusColor = "text-red-400";
+        }
+
+        return {
+          tesp,
+          estCfm,
+          statusLabel,
+          statusNote,
+          statusColor,
+        };
+      }, [
+        airflow.designCfm,
+        airflow.designStatic,
+        airflow.returnStatic,
+        airflow.supplyStatic,
+      ]);
+
+      // ==== Refrigerant (SH/SC) ====
+      const refrigData = useMemo(() => {
+        const evapSat = parseFloat(refrig.evapSat);
+        const suction = parseFloat(refrig.suctionLine);
+        const condSat = parseFloat(refrig.condSat);
+        const liquid = parseFloat(refrig.liquidLine);
+
+        if (
+          isNaN(evapSat) ||
+          isNaN(suction) ||
+          isNaN(condSat) ||
+          isNaN(liquid)
+        ) {
+          return {
+            superheat: null,
+            subcool: null,
+            shLabel: "--",
+            shNote: "Enter evap saturation and suction line temps.",
+            shColor: "text-slate-300",
+            scLabel: "--",
+            scNote: "Enter condensing saturation and liquid line temps.",
+            scColor: "text-slate-300",
+          };
+        }
+
+        const superheat = suction - evapSat;
+        const subcool = condSat - liquid;
+
+        let shLabel = "";
+        let shNote = "";
+        let shColor = "";
+        if (superheat < 5) {
+          shLabel = "Very Low";
+          shNote = "Superheat very low – risk of flooding compressor. Suspect overfeeding or overcharge.";
+          shColor = "text-red-400";
+        } else if (superheat < 8) {
+          shLabel = "Low";
+          shNote = "Superheat slightly low – watch for overfeeding, TXV issues, or overcharge.";
+          shColor = "text-amber-400";
+        } else if (superheat <= 20) {
+          shLabel = "In Range";
+          shNote = "Superheat in a common comfort-cooling window. Verify against manufacturer chart.";
+          shColor = "text-emerald-400";
+        } else {
+          shLabel = "High";
+          shNote = "Superheat high – could be undercharge, restricted feed, or low load/airflow.";
+          shColor = "text-orange-400";
+        }
+
+        let scLabel = "";
+        let scNote = "";
+        let scColor = "";
+        if (subcool < 5) {
+          scLabel = "Low";
+          scNote = "Subcooling low – suspect undercharge, flash gas, or liquid line issues.";
+          scColor = "text-red-400";
+        } else if (subcool <= 15) {
+          scLabel = "In Range";
+          scNote = "Subcooling in a typical comfort-cooling band. Confirm with nameplate/charging chart.";
+          scColor = "text-emerald-400";
+        } else {
+          scLabel = "High";
+          scNote = "Subcooling high – may indicate overcharge or condenser overperforming at current load.";
+          scColor = "text-orange-400";
+        }
+
+        return {
+          superheat,
+          subcool,
+          shLabel,
+          shNote,
+          shColor,
+          scLabel,
+          scNote,
+          scColor,
+        };
+      }, [refrig.evapSat, refrig.suctionLine, refrig.condSat, refrig.liquidLine]);
+
+      // ==== Primary diagnostic focus (narrative) ====
+      const primaryFocus = useMemo(() => {
+        if (deltaTData.delta === null || airflowData.tesp === null) {
+          return "Enter ΔT and static values to get a suggested focus.";
+        }
+
+        const dtLabel = deltaTData.label;
+        const staticLabel = airflowData.statusLabel;
+
+        if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static High") {
+          return "Focus on airflow restrictions first: filter, coil, duct size, closed registers, balancing.";
+        }
+        if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static Normal") {
+          return "Focus on refrigerant charge and load after basic airflow checks.";
+        }
+        if (dtLabel === "High" && staticLabel === "Static High") {
+          return "Likely low airflow through the coil – expect high superheat, potential freeze risk.";
+        }
+        if (dtLabel === "High" && staticLabel !== "Static High") {
+          return "High ΔT with normal/low static – check load, bypass, zoning, or oversized equipment.";
+        }
+        if (dtLabel === "In Range" && staticLabel === "Static Normal") {
+          return "Numbers look generally healthy – refine with superheat/subcool and manufacturer targets.";
+        }
+        if (dtLabel === "In Range" && staticLabel === "Static High") {
+          return "ΔT looks OK, but static is high – address duct restrictions and filter/coil cleanliness.";
+        }
+        return "Numbers look generally OK – use checklist and refrigerant data to confirm system health.";
+      }, [deltaTData, airflowData]);
+
+      // ==== Airflow verdict ====
+      const airflowVerdict = useMemo(() => {
+        if (deltaTData.delta === null || airflowData.tesp === null) {
+          return {
+            label: "Need More Data",
+            detail: "Enter ΔT and static (and design airflow) to evaluate airflow.",
+            color: "text-slate-300",
+          };
+        }
+
+        const designCfm = parseFloat(airflow.designCfm);
+        let airflowRatio = null;
+        if (airflowData.estCfm !== null && !isNaN(designCfm) && designCfm > 0) {
+          airflowRatio = airflowData.estCfm / designCfm;
+        }
+
+        const dtLabel = deltaTData.label;
+        const staticLabel = airflowData.statusLabel;
+
+        const airflowLikelyBad =
+          (staticLabel === "Static High" || (airflowRatio !== null && airflowRatio < 0.8)) &&
+          (dtLabel === "Very Low" || dtLabel === "Low" || dtLabel === "High");
+
+        if (airflowLikelyBad) {
+          return {
+            label: "Airflow Likely Primary Issue",
+            detail:
+              "Static and ΔT suggest the coil is not seeing proper airflow. Treat airflow as the first suspect.",
+            color: "text-red-400",
+          };
+        }
+
+        const dtOutOfRange = dtLabel === "Very Low" || dtLabel === "Low" || dtLabel === "High";
+        const staticNormalOrLow =
+          staticLabel === "Static Normal" || staticLabel === "Static Low";
+
+        if (dtOutOfRange && staticNormalOrLow && airflowRatio !== null && airflowRatio >= 0.9) {
+          return {
+            label: "Airflow Probably OK",
+            detail:
+              "Static and estimated CFM are close to design. Look harder at charge, load conditions, or system setup.",
+            color: "text-emerald-400",
+          };
+        }
+
+        if (dtLabel === "In Range" && staticLabel === "Static Normal") {
+          return {
+            label: "Airflow Looks Healthy",
+            detail:
+              "ΔT and static both look normal. Airflow is unlikely to be the main issue based on these numbers.",
+            color: "text-sky-300",
+          };
+        }
+
+        return {
+          label: "Inconclusive",
+          detail:
+            "Airflow may be contributing, but numbers don’t clearly confirm or rule it out. Use the checklist and additional measurements.",
+          color: "text-amber-300",
+        };
+      }, [deltaTData, airflowData, airflow.designCfm]);
+
+      // ==== Geolocation outdoor temp (C) ====
+      useEffect(() => {
+        if ("geolocation" in navigator) {
+          setOutdoorLoading(true);
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              try {
+                const res = await fetch(
+                  `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+                );
+                const data = await res.json();
+                if (data.current_weather) {
+                  setOutdoorTemp(data.current_weather.temperature); // Celsius
+                }
+              } catch (err) {
+                console.error("Failed to fetch outdoor weather", err);
+              } finally {
+                setOutdoorLoading(false);
+              }
+            },
+            (err) => {
+              console.warn("Geolocation denied or failed", err);
+              setOutdoorLoading(false);
+            }
+          );
+        }
+      }, []);
+
+      const displayOutdoorTemp = useMemo(() => {
+        if (outdoorTemp === null) return null;
+        if (state.unit === TemperatureUnit.CELSIUS) {
+          return Math.round(outdoorTemp * 10) / 10;
+        }
+        return Math.round((outdoorTemp * 9 / 5 + 32) * 10) / 10;
+      }, [outdoorTemp, state.unit]);
+
+      // ==== Local “AI” description ====
+      const fetchDescription = useCallback(async () => {
+        setLoadingAi(true);
+        const desc = generateAtmosphereDescription(
+          state.temperature,
+          state.humidity,
+          dewPointDisplay,
+          state.unit
+        );
+        await new Promise((r) => setTimeout(r, 300));
+        setAiText(desc);
+        setLoadingAi(false);
+      }, [state.temperature, state.humidity, dewPointDisplay, state.unit]);
+
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          fetchDescription();
+        }, 800);
+        return () => clearTimeout(timer);
+      }, [fetchDescription]);
+
+      // ==== Handlers ====
+      const toggleUnit = () => {
+        setState((prev) => ({
+          ...prev,
+          unit:
+            prev.unit === TemperatureUnit.CELSIUS
+              ? TemperatureUnit.FAHRENHEIT
+              : TemperatureUnit.CELSIUS,
+          temperature:
+            prev.unit === TemperatureUnit.CELSIUS
+              ? celsiusToFahrenheit(prev.temperature)
+              : fahrenheitToCelsius(prev.temperature),
+        }));
       };
 
-      return(
-        <div className="p-8 text-center">
-          <h1 className="text-4xl mb-6">DEWPOINT</h1>
+      const updateTemp = (val) => {
+        setState((prev) => ({ ...prev, temperature: parseFloat(val) }));
+      };
 
-          {/* Temp slider */}
-          <div className="mb-6">
-            <div className="text-3xl mb-2">
-              {unit==="F"?tempF:tempC.toFixed(1)}
-              <span className="text-sky-400">°</span>{unit}
+      const updateHumidity = (val) => {
+        setState((prev) => ({ ...prev, humidity: parseFloat(val) }));
+      };
+
+      const updateDbwbField = (field, val) => {
+        setDbwb((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateDtField = (field, val) => {
+        setDt((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateAirflowField = (field, val) => {
+        setAirflow((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateRefrigField = (field, val) => {
+        setRefrig((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const toggleCheck = (key) => {
+        setChecks((prev) => ({
+          ...prev,
+          [key]: !prev[key],
+        }));
+      };
+
+      // ==== Quick triage summary ====
+      const triageSummary = useMemo(() => {
+        if (
+          deltaTData.delta === null ||
+          airflowData.tesp === null ||
+          refrigData.superheat === null ||
+          refrigData.subcool === null
+        ) {
+          return {
+            title: "Need more data",
+            body:
+              "Enter ΔT (return/supply), static pressures, design airflow, and superheat/subcool to generate a triage summary.",
+            color: "text-slate-300",
+            icon: "fa-circle-info",
+          };
+        }
+
+        const dtLabel = deltaTData.label;
+        const staticLabel = airflowData.statusLabel;
+        const shLabel = refrigData.shLabel;
+        const scLabel = refrigData.scLabel;
+        const airflowLabel = airflowVerdict.label;
+
+        if (airflowLabel === "Airflow Likely Primary Issue") {
+          return {
+            title: "Most likely: airflow restriction / setup issue",
+            body:
+              "Numbers point to airflow as the main problem. Go after filter, coil cleanliness, duct sizing, closed registers, and blower tap or ECM setup before adjusting charge.",
+            color: "text-red-400",
+            icon: "fa-fan",
+          };
+        }
+
+        if (
+          (shLabel === "Very Low" || shLabel === "Low") &&
+          (scLabel === "High" || scLabel === "In Range")
+        ) {
+          return {
+            title: "Most likely: overcharge or overfeeding",
+            body:
+              "Very low superheat with normal/high subcool suggests liquid backed up into the evaporator. Confirm metering device operation and compare SH/SC to charging chart before recovering or adjusting charge.",
+            color: "text-orange-400",
+            icon: "fa-gauge-high",
+          };
+        }
+
+        if (
+          shLabel === "High" &&
+          (scLabel === "Low" || scLabel === "In Range")
+        ) {
+          return {
+            title: "Most likely: undercharge or feed restriction",
+            body:
+              "High superheat with low/normal subcool points to a starved evaporator. Check for restrictions (filter drier, TXV, distributor) and verify charge against manufacturer data.",
+            color: "text-orange-400",
+            icon: "fa-droplet-slash",
+          };
+        }
+
+        if (
+          (dtLabel === "Very Low" || dtLabel === "Low") &&
+          (airflowLabel === "Airflow Probably OK" ||
+            airflowLabel === "Airflow Looks Healthy")
+        ) {
+          return {
+            title: "Most likely: charge or load issue",
+            body:
+              "ΔT is low while airflow looks acceptable. Focus on charge, metering device behavior, and indoor/outdoor load conditions before tearing into ductwork.",
+            color: "text-amber-300",
+            icon: "fa-scale-balanced",
+          };
+        }
+
+        if (
+          dtLabel === "High" &&
+          airflowLabel !== "Airflow Likely Primary Issue"
+        ) {
+          return {
+            title: "Most likely: low load or oversized equipment",
+            body:
+              "High ΔT without strong airflow red flags often points to low load, zoning/bypass effects, or an oversized system. Confirm airflow is actually correct and then evaluate load conditions.",
+            color: "text-amber-300",
+            icon: "fa-arrow-up-wide-short",
+          };
+        }
+
+        if (
+          dtLabel === "In Range" &&
+          airflowLabel === "Airflow Looks Healthy" &&
+          refrigData.shLabel === "In Range" &&
+          refrigData.scLabel === "In Range"
+        ) {
+          return {
+            title: "System readings generally in range",
+            body:
+              "ΔT, static, superheat, and subcool all sit in typical bands. Use triage for comfort complaints, airflow balance, controls, and room-by-room issues rather than primary equipment fault.",
+            color: "text-emerald-400",
+            icon: "fa-circle-check",
+          };
+        }
+
+        return {
+          title: "Mixed signals – no single smoking gun",
+          body:
+            "Readings don’t strongly blame airflow or charge alone. Walk through the checklist, verify nameplate targets, and look for multiple smaller issues adding up (duct design, charge, load).",
+          color: "text-sky-300",
+          icon: "fa-magnifying-glass",
+        };
+      }, [deltaTData, airflowData, airflowVerdict, refrigData]);
+
+      // ==== Logo ====
+      const Logo = () => (
+        <div className="flex items-center gap-4">
+          <div className="relative w-16 h-16">
+            <svg viewBox="0 0 100 100" className="w-full h-full">
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="rgba(56, 189, 248, 0.2)"
+                strokeWidth="2"
+              />
+              <path
+                d="M50 5 A45 45 0 0 1 95 50"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M15 50 A35 35 0 0 1 50 15"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M45 15 L50 10 L55 15"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M10 50 L15 45 L20 50"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M15 50 A35 35 0 0 0 85 50"
+                fill="none"
+                stroke="#fb923c"
+                strokeWidth="6"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
+              <g transform="translate(50, 50) scale(0.6)">
+                <path
+                  d="M0 -30 L0 30 M-30 0 L30 0 M-21 -21 L21 21 M-21 21 L21 -21"
+                  stroke="#f8fafc"
+                  strokeWidth="4"
+                />
+              </g>
+            </svg>
+          </div>
+          <div className="flex flex-col leading-none">
+            <span className="text-3xl font-light tracking-widest text-white uppercase">
+              Quality Air
+            </span>
+            <span className="text-sm font-medium tracking-[0.2em] text-slate-500 uppercase">
+              Heating &amp; Cooling
+            </span>
+          </div>
+        </div>
+      );
+
+      // ==== JSX UI ====
+      return (
+        <div className="min-h-screen flex flex-col p-6 md:p-12 relative overflow-hidden">
+          {/* Background glows */}
+          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px] animate-pulse delay-700"></div>
+
+          {/* Header */}
+          <div className="w-full flex flex-col md:flex-row justify-between items-center mb-16 relative z-20 gap-8">
+            <Logo />
+            <div className="glass px-6 py-4 rounded-3xl flex flex-col items-end shadow-xl border-sky-500/10">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
+                Local Outdoor Temp
+              </span>
+              <div className="flex items-center gap-3">
+                {outdoorLoading ? (
+                  <div className="h-8 w-16 bg-white/5 animate-pulse rounded-lg"></div>
+                ) : displayOutdoorTemp !== null ? (
+                  <div className="text-3xl font-bold glow-text">
+                    {displayOutdoorTemp}
+                    <span className="text-sky-400">°</span>
+                    {state.unit}
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-600">Location required</span>
+                )}
+                <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
+              </div>
             </div>
-            <button
-              onClick={switchUnit}
-              className="px-4 py-2 bg-white/10 rounded-xl border border-white/10 text-xs mb-2"
-            >
-              Switch to °{unit==="F"?"C":"F"}
-            </button>
-            <input
-              type="range"
-              min={unit==="F"?"-4":"-20"}
-              max={unit==="F"?"122":"50"}
-              step="0.5"
-              value={unit==="F"?tempF:tempC}
-              onChange={e=>setTempF(unit==="F"?parseFloat(e.target.value):c2f(parseFloat(e.target.value)))}
-              className="w-full"
-            />
           </div>
 
-          {/* Humidity */}
-          <div className="mb-6">
-            <div className="text-3xl mb-2">
-              {rh}<span className="text-sky-400">%</span>
-            </div>
-            <input type="range" min="0" max="100" step="1"
-              value={rh}
-              onChange={e=>setRh(parseFloat(e.target.value))}
-              className="w-full"
-            />
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <header className="mb-12 text-center relative z-10">
+              <h1 className="text-5xl md:text-8xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 mb-2">
+                DEWPOINT<span className="text-white">.</span>
+              </h1>
+              <p className="text-slate-400 font-light tracking-[0.5em] uppercase text-xs">
+                Thermodynamic Clarity
+              </p>
+            </header>
+
+            <main className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
+              {/* LEFT: Atmosphere controls */}
+              <section className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col gap-10 shadow-2xl">
+                {/* Temperature */}
+                <div className="space-y-6">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
+                        Ambient Temperature
+                      </label>
+                      <div className="text-5xl font-light">
+                        {state.temperature}
+                        <span className="text-sky-400">°</span>
+                        {state.unit}
+                      </div>
+                    </div>
+                    <button
+                      onClick={toggleUnit}
+                      className="bg-white/5 hover:bg-white/10 px-5 py-3 rounded-2xl text-xs font-bold transition-all border border-white/10 active:scale-95 shadow-lg"
+                    >
+                      Switch to °{state.unit === TemperatureUnit.CELSIUS ? "F" : "C"}
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={state.unit === TemperatureUnit.CELSIUS ? "-20" : "-4"}
+                    max={state.unit === TemperatureUnit.CELSIUS ? "50" : "122"}
+                    step="0.5"
+                    value={state.temperature}
+                    onChange={(e) => updateTemp(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Humidity */}
+                <div className="space-y-6">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
+                        Relative Humidity
+                      </label>
+                      <div className="text-5xl font-light">
+                        {state.humidity}
+                        <span className="text-sky-400">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={state.humidity}
+                    onChange={(e) => updateHumidity(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* AI text */}
+                <div className="mt-auto pt-8 border-t border-white/5">
+                  <div className="flex items-start gap-4 italic text-slate-300 min-h-[60px]">
+                    <i className="fa-solid fa-sparkles text-sky-400 mt-2 text-xl"></i>
+                    {loadingAi ? (
+                      <span className="animate-pulse text-lg">
+                        Reading the room…
+                      </span>
+                    ) : (
+                      <p className="text-xl leading-relaxed font-light">{aiText}</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* RIGHT: Tools */}
+              <section className="flex flex-col gap-8">
+                {/* Dewpoint display */}
+                <div className="glass p-10 md:p-14 rounded-[2.5rem] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <label className="text-xs font-bold uppercase tracking-[0.3em] text-slate-500 mb-6 z-10">
+                    Calculated Dew Point
+                  </label>
+                  <div className="text-[10rem] font-black leading-none glow-text z-10 transition-transform duration-700 group-hover:scale-110">
+                    {dewPointDisplay}
+                    <span className="text-5xl align-top mt-10 inline-block text-sky-400">
+                      °
+                    </span>
+                  </div>
+                  <div
+                    className={`mt-8 text-3xl font-bold z-10 ${comfort.color} flex items-center gap-4 uppercase tracking-tighter`}
+                  >
+                    <i
+                      className={`fa-solid ${
+                        comfort.level > 3 ? "fa-face-hot" : "fa-droplet"
+                      } animate-bounce`}
+                    ></i>
+                    {comfort.label}
+                  </div>
+                </div>
+
+                {/* Saturation & vapor status */}
+                <div className="glass p-8 rounded-[2rem] grid grid-cols-2 gap-6">
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
+                    <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-2">
+                      Saturation Level
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-sky-400"
+                          style={{ width: state.humidity + "%" }}
+                        ></div>
+                      </div>
+                      <span className="text-xl font-bold">
+                        {state.humidity}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
+                    <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-2">
+                      Vapor Status
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <i
+                        className={`fa-solid fa-wind ${
+                          dewPointC > 20 ? "text-orange-400" : "text-sky-400"
+                        }`}
+                      ></i>
+                      <span className="text-xl font-bold">
+                        {dewPointC > 20 ? "Heavy" : "Light"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evap Coil Target (DB/WB) */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Evap Coil Target (DB/WB)
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Entering air DB / WB in °F. Uses simple field rule-of-thumb.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-snowflake text-sky-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Entering Dry-Bulb (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={dbwb.db}
+                        onChange={(e) => updateDbwbField("db", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Entering Wet-Bulb (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={dbwb.wb}
+                        onChange={(e) => updateDbwbField("wb", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mt-2 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Entering RH
+                      </span>
+                      <span className="text-lg font-semibold text-sky-300">
+                        {dbwbResults ? Math.round(dbwbResults.rh) + "%" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Dew Point (°F)
+                      </span>
+                      <span className="text-lg font-semibold text-emerald-300">
+                        {dbwbResults ? dbwbResults.dewF.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Est. Evap Sat (°F)
+                      </span>
+                      <span className="text-lg font-semibold text-amber-300">
+                        {dbwbResults ? dbwbResults.coilSatF.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Approximate only – coil saturation varies by system design, airflow, and load.
+                  </p>
+                </div>
+
+                {/* ΔT + airflow verdict + checklist */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        ΔT Across Coil (Return / Supply)
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Return and supply dry-bulb in °F. Typical comfort-cooling ΔT is roughly 16–22°F.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-temperature-half text-amber-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Return Air DB (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                        value={dt.returnDb}
+                        onChange={(e) => updateDtField("returnDb", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Supply Air DB (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                        value={dt.supplyDb}
+                        onChange={(e) => updateDtField("supplyDb", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <div>
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        ΔT (Return − Supply)
+                      </span>
+                      <span className="text-3xl font-bold text-amber-200">
+                        {deltaTData.delta !== null ? deltaTData.delta.toFixed(1) + "°" : "--"}
+                      </span>
+                    </div>
+                    <div className="text-right max-w-[230px]">
+                      <span className={`block text-xs font-bold uppercase tracking-wide ${deltaTData.color}`}>
+                        {deltaTData.label}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 mt-1">
+                        {deltaTData.note}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/5 text-xs">
+                    <div className="mb-2 text-slate-300">
+                      <span className="font-semibold text-slate-200">
+                        Airflow verdict:&nbsp;
+                      </span>
+                      <span className={`${airflowVerdict.color} font-semibold`}>
+                        {airflowVerdict.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mb-3">
+                      {airflowVerdict.detail}
+                    </p>
+
+                    <div className="mb-2 text-slate-300">
+                      <span className="font-semibold text-slate-200">Diagnostic focus: </span>
+                      <span>{primaryFocus}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 mt-2">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.filter}
+                          onChange={() => toggleCheck("filter")}
+                        />
+                        <span>Filter clean / correct?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.coil}
+                          onChange={() => toggleCheck("coil")}
+                        />
+                        <span>Evap coil clean?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.blower}
+                          onChange={() => toggleCheck("blower")}
+                        />
+                        <span>Blower tap / speed correct?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.charge}
+                          onChange={() => toggleCheck("charge")}
+                        />
+                        <span>Charge verified?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={checks.ducts}
+                          onChange={() => toggleCheck("ducts")}
+                        />
+                        <span>Ducts / registers open, not crushed, no bypass?</span>
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-500">
+                      Use the checklist to track what you've confirmed. Remaining unchecked items are common suspects when ΔT and static look off.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Airflow & Static */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Airflow &amp; Static Check
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Design airflow and static vs measured. Estimate is approximate – confirm with manufacturer tables.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-fan text-sky-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Design Airflow (CFM)
+                      </label>
+                      <input
+                        type="number"
+                        step="10"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.designCfm}
+                        onChange={(e) => updateAirflowField("designCfm", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Design Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.designStatic}
+                        onChange={(e) => updateAirflowField("designStatic", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Return Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.returnStatic}
+                        onChange={(e) => updateAirflowField("returnStatic", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Supply Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.supplyStatic}
+                        onChange={(e) => updateAirflowField("supplyStatic", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mt-2 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Total External Static
+                      </span>
+                      <span className="text-lg font-semibold text-sky-300">
+                        {airflowData.tesp !== null ? airflowData.tesp.toFixed(2) + " in" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Est. Airflow
+                      </span>
+                      <span className="text-lg font-semibold text-emerald-300">
+                        {airflowData.estCfm !== null ? Math.round(airflowData.estCfm) + " CFM" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Static Status
+                      </span>
+                      <span className={`text-lg font-semibold ${airflowData.statusColor}`}>
+                        {airflowData.statusLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {airflowData.statusNote}
+                  </p>
+                </div>
+
+                {/* Refrigerant Circuit */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Refrigerant Circuit – Superheat / Subcool
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Enter saturation and line temperatures in °F. Targets are generic – always verify with charging charts.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-gauge-high text-emerald-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Evap Sat (Suct Sat °F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                        value={refrig.evapSat}
+                        onChange={(e) => updateRefrigField("evapSat", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Suction Line Temp (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                        value={refrig.suctionLine}
+                        onChange={(e) => updateRefrigField("suctionLine", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Cond Sat (Liquid Sat °F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={refrig.condSat}
+                        onChange={(e) => updateRefrigField("condSat", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Liquid Line Temp (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={refrig.liquidLine}
+                        onChange={(e) => updateRefrigField("liquidLine", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-3 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Superheat
+                      </span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-2xl font-semibold text-emerald-300">
+                          {refrigData.superheat !== null
+                            ? refrigData.superheat.toFixed(1) + "°"
+                            : "--"}
+                        </span>
+                        <span className={`text-[11px] font-semibold ${refrigData.shColor}`}>
+                          {refrigData.shLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {refrigData.shNote}
+                      </p>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Subcool
+                      </span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-2xl font-semibold text-sky-300">
+                          {refrigData.subcool !== null
+                            ? refrigData.subcool.toFixed(1) + "°"
+                            : "--"}
+                        </span>
+                        <span className={`text-[11px] font-semibold ${refrigData.scColor}`}>
+                          {refrigData.scLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {refrigData.scNote}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Always compare superheat/subcooling to the equipment nameplate or charging chart for the exact refrigerant, tonnage, and conditions.
+                  </p>
+                </div>
+
+                {/* Quick Triage Summary */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Quick Triage Summary
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Reads ΔT, static, airflow, superheat &amp; subcool together to suggest where to aim first.
+                      </p>
+                    </div>
+                    <i className={`fa-solid ${triageSummary.icon} text-xl ${triageSummary.color}`}></i>
+                  </div>
+
+                  <div className="mt-2 text-xs">
+                    <p className={`text-sm font-semibold ${triageSummary.color}`}>
+                      {triageSummary.title}
+                    </p>
+                    <p className="mt-2 text-[11px] text-slate-300">
+                      {triageSummary.body}
+                    </p>
+                    <p className="mt-3 text-[10px] text-slate-500">
+                      Use this as a guide, not a replacement for manufacturer data. Always confirm with gauges, charts, and real-world conditions.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            </main>
           </div>
 
-          {/* Dewpoint */}
-          <div className="text-6xl font-bold mb-2 glow-text">
-            {dewOut}<span className="text-sky-400">°</span>
-          </div>
-          <div className={`text-xl ${com.color} mb-6`}>{com.label}</div>
-
-          <div className="italic">{load?"…thinking":txt}</div>
+          <footer className="mt-12 p-8 text-slate-600 text-[10px] tracking-widest uppercase text-center relative z-10 border-t border-white/5">
+            &copy; {new Date().getFullYear()} Aesthetic Engineering &bull; DewPoint • Field Tool
+          </footer>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    const rootElement = document.getElementById("root");
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
   </script>
 </body>
 </html>
