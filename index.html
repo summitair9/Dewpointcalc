@@ -93,7 +93,7 @@
       return { label: "Oppressive", color: "text-red-500", level: 5 };
     }
 
-    // Simple local description (no API)
+    // Simple local description (no external AI)
     function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
       const unitSymbol = "°" + unit;
       if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
@@ -244,17 +244,17 @@
       // outdoor temp (from Open-Meteo, stored as °C)
       const [outdoorTempC, setOutdoorTempC] = useState(null);
       const [outdoorLoading, setOutdoorLoading] = useState(false);
-
-      // location dropdown
       const [locationName, setLocationName] = useState("Local");
-      const [showLocationMenu, setShowLocationMenu] = useState(false);
+      const [selectedLocationKey, setSelectedLocationKey] = useState("local");
+      const [customCity, setCustomCity] = useState("");
 
       const locations = [
         { key: "local", label: "Local (device)", type: "local" },
-        { key: "nyc", label: "New York, NY", lat: 40.7128, lon: -74.006 },
-        { key: "mia", label: "Miami, FL", lat: 25.7617, lon: -80.1918 },
-        { key: "la", label: "Los Angeles, CA", lat: 34.0522, lon: -118.2437 },
-        { key: "chi", label: "Chicago, IL", lat: 41.8781, lon: -87.6298 },
+        { key: "custom", label: "Custom city (type below)", type: "custom" },
+        { key: "nyc", label: "New York, NY", type: "fixed", lat: 40.7128, lon: -74.006 },
+        { key: "mia", label: "Miami, FL", type: "fixed", lat: 25.7617, lon: -80.1918 },
+        { key: "la", label: "Los Angeles, CA", type: "fixed", lat: 34.0522, lon: -118.2437 },
+        { key: "chi", label: "Chicago, IL", type: "fixed", lat: 41.8781, lon: -87.6298 },
       ];
 
       // DB/WB state
@@ -443,12 +443,39 @@
         }
       }
 
+      async function fetchCityWeather(name) {
+        try {
+          setOutdoorLoading(true);
+          const res = await fetch(
+            "https://geocoding-api.open-meteo.com/v1/search?name=" +
+              encodeURIComponent(name) +
+              "&count=1"
+          );
+          const data = await res.json();
+          if (data && data.results && data.results.length > 0) {
+            const r = data.results[0];
+            const niceName =
+              r.name + (r.country_code ? ", " + r.country_code : "");
+            setLocationName(niceName);
+            await fetchWeather(r.latitude, r.longitude);
+          } else {
+            console.log("No geocode result");
+            setOutdoorTempC(null);
+          }
+        } catch (e) {
+          console.log("geocode error", e);
+        } finally {
+          setOutdoorLoading(false);
+        }
+      }
+
       // on load: try local
       useEffect(() => {
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               setLocationName("Local");
+              setSelectedLocationKey("local");
               fetchWeather(pos.coords.latitude, pos.coords.longitude);
             },
             () => {
@@ -457,24 +484,6 @@
           );
         }
       }, []);
-
-      // location select
-      function selectLocation(loc) {
-        setShowLocationMenu(false);
-        setLocationName(loc.label);
-        if (loc.type === "local") {
-          if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                fetchWeather(pos.coords.latitude, pos.coords.longitude);
-              },
-              () => {}
-            );
-          }
-        } else {
-          fetchWeather(loc.lat, loc.lon);
-        }
-      }
 
       // display outdoor temp in current unit
       const displayOutdoor = useMemo(() => {
@@ -578,6 +587,37 @@
         }));
       }
 
+      function handleLocationSelectChange(e) {
+        const key = e.target.value;
+        setSelectedLocationKey(key);
+        const loc = locations.find((l) => l.key === key);
+        if (!loc) return;
+
+        if (loc.type === "local") {
+          setLocationName("Local");
+          if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                fetchWeather(pos.coords.latitude, pos.coords.longitude);
+              },
+              () => {}
+            );
+          }
+        } else if (loc.type === "fixed") {
+          setLocationName(loc.label);
+          fetchWeather(loc.lat, loc.lon);
+        } else if (loc.type === "custom") {
+          // wait for user to type city and press "Use"
+        }
+      }
+
+      function applyCustomCity() {
+        const name = customCity.trim();
+        if (!name) return;
+        setSelectedLocationKey("custom");
+        fetchCityWeather(name);
+      }
+
       // logo
       function Logo() {
         return (
@@ -662,31 +702,47 @@
             <Logo />
 
             <div className="flex flex-col md:flex-row items-stretch gap-4 relative z-20">
-              {/* outdoor widget + location menu */}
-              <div className="glass px-6 py-4 rounded-3xl flex flex-col items-end shadow-xl border-sky-500/10 relative z-30">
-                <button
-                  type="button"
-                  onClick={() => setShowLocationMenu(!showLocationMenu)}
-                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1"
+              {/* outdoor widget + NEW select + custom city */}
+              <div className="glass px-6 py-4 rounded-3xl flex flex-col items-stretch shadow-xl border-sky-500/10 relative z-30 min-w-[230px]">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
+                  Outdoor Temp Source
+                </span>
+                <select
+                  className="border border-white/10 rounded-2xl px-3 py-1 text-[11px] text-slate-200 outline-none bg-transparent mb-2"
+                  value={selectedLocationKey}
+                  onChange={handleLocationSelectChange}
                 >
-                  <span>{locationName} Outdoor Temp</span>
-                  <i className="fa-solid fa-caret-down text-[9px]"></i>
-                </button>
-                {showLocationMenu && (
-                  <div className="absolute top-full right-0 mt-2 glass rounded-2xl p-3 w-44 shadow-xl z-50">
-                    {locations.map((loc) => (
-                      <button
-                        key={loc.key}
-                        type="button"
-                        onClick={() => selectLocation(loc)}
-                        className="w-full text-left text-[11px] text-slate-200 hover:text-sky-300 py-1"
-                      >
-                        {loc.label}
-                      </button>
-                    ))}
+                  {locations.map((loc) => (
+                    <option
+                      key={loc.key}
+                      value={loc.key}
+                      className="bg-slate-900 text-slate-100"
+                    >
+                      {loc.label}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedLocationKey === "custom" && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-400"
+                      placeholder="City, State (e.g. Miami, FL)"
+                      value={customCity}
+                      onChange={(e) => setCustomCity(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCustomCity}
+                      className="text-[10px] px-3 py-1 rounded-xl bg-sky-500/80 hover:bg-sky-500 text-white font-semibold"
+                    >
+                      Use
+                    </button>
                   </div>
                 )}
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-3 mt-1">
                   {outdoorLoading ? (
                     <div className="h-8 w-16 bg-white/5 animate-pulse rounded-lg"></div>
                   ) : displayOutdoor != null ? (
@@ -696,10 +752,13 @@
                       {state.unit}
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-600">Location needed</span>
+                    <span className="text-xs text-slate-600">No data</span>
                   )}
                   <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
                 </div>
+                <span className="mt-1 text-[9px] text-slate-500 uppercase tracking-[0.2em]">
+                  Currently: {locationName}
+                </span>
               </div>
 
               {/* jump to card */}
