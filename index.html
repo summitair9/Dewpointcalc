@@ -179,6 +179,14 @@
         supplyStatic: 0.22,
       });
 
+      // Refrigerant circuit state (superheat / subcool) °F
+      const [refrig, setRefrig] = useState({
+        evapSat: 40,
+        suctionLine: 55,
+        condSat: 110,
+        liquidLine: 95,
+      });
+
       // Checklist state (for narrowing issues)
       const [checks, setChecks] = useState({
         filter: false,
@@ -330,6 +338,85 @@
         airflow.supplyStatic,
       ]);
 
+      // Refrigerant data (superheat / subcool)
+      const refrigData = useMemo(() => {
+        const evapSat = parseFloat(refrig.evapSat);
+        const suction = parseFloat(refrig.suctionLine);
+        const condSat = parseFloat(refrig.condSat);
+        const liquid = parseFloat(refrig.liquidLine);
+
+        if (
+          isNaN(evapSat) ||
+          isNaN(suction) ||
+          isNaN(condSat) ||
+          isNaN(liquid)
+        ) {
+          return {
+            superheat: null,
+            subcool: null,
+            shLabel: "--",
+            shNote: "Enter evap saturation and suction line temps.",
+            shColor: "text-slate-300",
+            scLabel: "--",
+            scNote: "Enter condensing saturation and liquid line temps.",
+            scColor: "text-slate-300",
+          };
+        }
+
+        const superheat = suction - evapSat;   // °F
+        const subcool = condSat - liquid;      // °F
+
+        let shLabel = "";
+        let shNote = "";
+        let shColor = "";
+        // Very generic comfort-cooling targets
+        if (superheat < 5) {
+          shLabel = "Very Low";
+          shNote = "Superheat very low – risk of flooding compressor. Suspect overfeeding or overcharge.";
+          shColor = "text-red-400";
+        } else if (superheat < 8) {
+          shLabel = "Low";
+          shNote = "Superheat slightly low – watch for overfeeding, TXV issues, or overcharge.";
+          shColor = "text-amber-400";
+        } else if (superheat <= 20) {
+          shLabel = "In Range";
+          shNote = "Superheat in a common comfort-cooling window. Verify against manufacturer chart.";
+          shColor = "text-emerald-400";
+        } else {
+          shLabel = "High";
+          shNote = "Superheat high – could be undercharge, restricted feed, or low load/airflow.";
+          shColor = "text-orange-400";
+        }
+
+        let scLabel = "";
+        let scNote = "";
+        let scColor = "";
+        if (subcool < 5) {
+          scLabel = "Low";
+          scNote = "Subcooling low – suspect undercharge, flash gas, or liquid line issues.";
+          scColor = "text-red-400";
+        } else if (subcool <= 15) {
+          scLabel = "In Range";
+          scNote = "Subcooling in a typical comfort-cooling band. Confirm with nameplate/charging chart.";
+          scColor = "text-emerald-400";
+        } else {
+          scLabel = "High";
+          scNote = "Subcooling high – may indicate overcharge or condenser overperforming at current load.";
+          scColor = "text-orange-400";
+        }
+
+        return {
+          superheat,
+          subcool,
+          shLabel,
+          shNote,
+          shColor,
+          scLabel,
+          scNote,
+          scColor,
+        };
+      }, [refrig.evapSat, refrig.suctionLine, refrig.condSat, refrig.liquidLine]);
+
       // Primary diagnostic focus (narrative)
       const primaryFocus = useMemo(() => {
         if (deltaTData.delta === null || airflowData.tesp === null) {
@@ -351,10 +438,13 @@
         if (dtLabel === "High" && staticLabel !== "Static High") {
           return "High ΔT with normal/low static – check load, bypass, zoning, or oversized equipment.";
         }
+        if (dtLabel === "In Range" && staticLabel === "Static Normal") {
+          return "Numbers look generally healthy – refine with superheat/subcool and manufacturer targets.";
+        }
         if (dtLabel === "In Range" && staticLabel === "Static High") {
           return "ΔT looks OK, but static is high – address duct restrictions and filter/coil cleanliness.";
         }
-        return "Numbers look generally OK – use checklist to confirm system health.";
+        return "Numbers look generally OK – use checklist and refrigerant data to confirm system health.";
       }, [deltaTData, airflowData]);
 
       // Airflow verdict: is airflow likely THE issue or not?
@@ -521,6 +611,13 @@
 
       const updateAirflowField = (field, val) => {
         setAirflow((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateRefrigField = (field, val) => {
+        setRefrig((prev) => ({
           ...prev,
           [field]: val === "" ? "" : parseFloat(val),
         }));
@@ -1075,6 +1172,115 @@
 
                   <p className="text-[10px] text-slate-500 mt-1">
                     {airflowData.statusNote}
+                  </p>
+                </div>
+
+                {/* Refrigerant Circuit – Superheat / Subcool */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Refrigerant Circuit – Superheat / Subcool
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Enter saturation and line temperatures in °F. Targets are generic – always verify with manufacturer charging charts.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-gauge-high text-emerald-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Evap Sat (Suct Sat °F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                        value={refrig.evapSat}
+                        onChange={(e) => updateRefrigField("evapSat", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Suction Line Temp (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                        value={refrig.suctionLine}
+                        onChange={(e) => updateRefrigField("suctionLine", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Cond Sat (Liquid Sat °F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={refrig.condSat}
+                        onChange={(e) => updateRefrigField("condSat", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Liquid Line Temp (°F)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={refrig.liquidLine}
+                        onChange={(e) => updateRefrigField("liquidLine", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-3 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Superheat
+                      </span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-2xl font-semibold text-emerald-300">
+                          {refrigData.superheat !== null
+                            ? refrigData.superheat.toFixed(1) + "°"
+                            : "--"}
+                        </span>
+                        <span className={`text-[11px] font-semibold ${refrigData.shColor}`}>
+                          {refrigData.shLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {refrigData.shNote}
+                      </p>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Subcool
+                      </span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-2xl font-semibold text-sky-300">
+                          {refrigData.subcool !== null
+                            ? refrigData.subcool.toFixed(1) + "°"
+                            : "--"}
+                        </span>
+                        <span className={`text-[11px] font-semibold ${refrigData.scColor}`}>
+                          {refrigData.scLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {refrigData.scNote}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Always compare superheat/subcooling to the equipment nameplate or charging chart for the exact refrigerant, tonnage, and conditions.
                   </p>
                 </div>
               </section>
