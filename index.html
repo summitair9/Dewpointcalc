@@ -159,16 +159,33 @@
       const [outdoorTemp, setOutdoorTemp] = useState(null);
       const [outdoorLoading, setOutdoorLoading] = useState(false);
 
-      // New: DB/WB helper state (always °F)
+      // DB/WB helper state (always °F)
       const [dbwb, setDbwb] = useState({
         db: 75,
         wb: 63,
       });
 
-      // New: ΔT helper state (°F)
+      // ΔT helper state (°F)
       const [dt, setDt] = useState({
         returnDb: 75,
         supplyDb: 55,
+      });
+
+      // Airflow / static state
+      const [airflow, setAirflow] = useState({
+        designCfm: 400,
+        designStatic: 0.5,
+        returnStatic: 0.08,
+        supplyStatic: 0.22,
+      });
+
+      // Checklist state (for narrowing issues)
+      const [checks, setChecks] = useState({
+        filter: false,
+        coil: false,
+        blower: false,
+        charge: false,
+        ducts: false,
       });
 
       // Derived values
@@ -205,7 +222,14 @@
       const deltaTData = useMemo(() => {
         const r = parseFloat(dt.returnDb);
         const s = parseFloat(dt.supplyDb);
-        if (isNaN(r) || isNaN(s)) return { delta: null, label: "--", note: "Enter return & supply temps.", color: "text-slate-300" };
+        if (isNaN(r) || isNaN(s)) {
+          return {
+            delta: null,
+            label: "--",
+            note: "Enter return & supply temps.",
+            color: "text-slate-300",
+          };
+        }
 
         const d = r - s;
         let label = "";
@@ -214,11 +238,11 @@
 
         if (d < 8) {
           label = "Very Low";
-          note = "Check charge / airflow – coil barely cooling.";
+          note = "ΔT far below typical. Check airflow first, then charge and load.";
           color = "text-red-400";
         } else if (d < 14) {
           label = "Low";
-          note = "Below typical range – verify charge & airflow.";
+          note = "Below typical range – verify airflow and refrigerant charge.";
           color = "text-amber-400";
         } else if (d <= 22) {
           label = "In Range";
@@ -226,12 +250,112 @@
           color = "text-emerald-400";
         } else {
           label = "High";
-          note = "High ΔT – can indicate low airflow or other issues.";
+          note = "High ΔT – often points to low airflow or very low load.";
           color = "text-orange-400";
         }
 
         return { delta: d, label, note, color };
       }, [dt.returnDb, dt.supplyDb]);
+
+      // Airflow / static derived
+      const airflowData = useMemo(() => {
+        const designCfm = parseFloat(airflow.designCfm);
+        const designStatic = parseFloat(airflow.designStatic);
+        const rs = parseFloat(airflow.returnStatic);
+        const ss = parseFloat(airflow.supplyStatic);
+
+        if (
+          isNaN(designCfm) ||
+          designCfm <= 0 ||
+          isNaN(designStatic) ||
+          designStatic <= 0 ||
+          isNaN(rs) ||
+          isNaN(ss)
+        ) {
+          return {
+            tesp: null,
+            estCfm: null,
+            statusLabel: "--",
+            statusNote: "Enter design airflow and static with measured return/supply.",
+            statusColor: "text-slate-300",
+          };
+        }
+
+        const tesp = Math.abs(rs) + Math.abs(ss);
+
+        // Rough fan-law-based estimate:
+        // CFM ∝ sqrt(1 / static). We'll normalize to design.
+        let estCfm = null;
+        if (tesp > 0.05) {
+          const ratio = Math.sqrt(designStatic / tesp);
+          estCfm = designCfm * ratio;
+          // clamp to 50–150% of design so it doesn't go crazy
+          const minCfm = designCfm * 0.5;
+          const maxCfm = designCfm * 1.5;
+          estCfm = Math.max(minCfm, Math.min(maxCfm, estCfm));
+        }
+
+        let statusLabel = "";
+        let statusNote = "";
+        let statusColor = "";
+
+        if (tesp < designStatic * 0.7) {
+          statusLabel = "Static Low";
+          statusNote =
+            "Total external static is below expected – could be low resistance duct system or low airflow setting.";
+          statusColor = "text-sky-300";
+        } else if (tesp <= designStatic * 1.2) {
+          statusLabel = "Static Normal";
+          statusNote =
+            "Static near design – airflow likely close to expected if blower setup is correct.";
+          statusColor = "text-emerald-400";
+        } else {
+          statusLabel = "Static High";
+          statusNote =
+            "Static above design – restrictions, undersized duct, closed registers, dirty filter/coil.";
+          statusColor = "text-red-400";
+        }
+
+        return {
+          tesp,
+          estCfm,
+          statusLabel,
+          statusNote,
+          statusColor,
+        };
+      }, [
+        airflow.designCfm,
+        airflow.designStatic,
+        airflow.returnStatic,
+        airflow.supplyStatic,
+      ]);
+
+      // Primary focus suggestion based on ΔT + static
+      const primaryFocus = useMemo(() => {
+        if (deltaTData.delta === null || airflowData.tesp === null) {
+          return "Enter ΔT and static values to get a suggested focus.";
+        }
+
+        const dtLabel = deltaTData.label;
+        const staticLabel = airflowData.statusLabel;
+
+        if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static High") {
+          return "Focus on airflow restrictions: filter, coil, duct size, closed registers, balancing.";
+        }
+        if ((dtLabel === "Very Low" || dtLabel === "Low") && staticLabel === "Static Normal") {
+          return "Focus on refrigerant charge and load: outdoor coil, metering device, charge, staging.";
+        }
+        if (dtLabel === "High" && staticLabel === "Static High") {
+          return "Likely low airflow through the coil – expect high superheat, potential freeze risk.";
+        }
+        if (dtLabel === "High" && staticLabel !== "Static High") {
+          return "High ΔT with normal/low static – check load, bypass, zoning, or oversized equipment.";
+        }
+        if (dtLabel === "In Range" && staticLabel === "Static High") {
+          return "ΔT looks OK, but static is high – address duct restrictions and filter/coil cleanliness.";
+        }
+        return "Numbers look generally OK – use checklist to confirm system health.";
+      }, [deltaTData, airflowData]);
 
       // Fetch outdoor temp (Open-Meteo)
       useEffect(() => {
@@ -326,6 +450,20 @@
         setDt((prev) => ({
           ...prev,
           [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const updateAirflowField = (field, val) => {
+        setAirflow((prev) => ({
+          ...prev,
+          [field]: val === "" ? "" : parseFloat(val),
+        }));
+      };
+
+      const toggleCheck = (key) => {
+        setChecks((prev) => ({
+          ...prev,
+          [key]: !prev[key],
         }));
       };
 
@@ -648,7 +786,7 @@
                   </p>
                 </div>
 
-                {/* ΔT Across Coil Helper */}
+                {/* ΔT Across Coil Helper + checklist */}
                 <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -698,15 +836,164 @@
                         {deltaTData.delta !== null ? deltaTData.delta.toFixed(1) + "°" : "--"}
                       </span>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right max-w-[230px]">
                       <span className={`block text-xs font-bold uppercase tracking-wide ${deltaTData.color}`}>
                         {deltaTData.label}
                       </span>
-                      <span className="block text-[10px] text-slate-400 mt-1 max-w-[220px]">
+                      <span className="block text-[10px] text-slate-400 mt-1">
                         {deltaTData.note}
                       </span>
                     </div>
                   </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/5 text-xs">
+                    <div className="mb-2 text-slate-300">
+                      <span className="font-semibold text-slate-200">Primary focus: </span>
+                      <span>{primaryFocus}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.filter}
+                          onChange={() => toggleCheck("filter")}
+                        />
+                        <span>Filter clean / correct?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.coil}
+                          onChange={() => toggleCheck("coil")}
+                        />
+                        <span>Evap coil clean?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.blower}
+                          onChange={() => toggleCheck("blower")}
+                        />
+                        <span>Blower tap / speed correct?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checks.charge}
+                          onChange={() => toggleCheck("charge")}
+                        />
+                        <span>Charge verified?</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={checks.ducts}
+                          onChange={() => toggleCheck("ducts")}
+                        />
+                        <span>Ducts / registers open, not crushed, no bypass?</span>
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-500">
+                      Use the checklist to track what you've confirmed. Remaining unchecked items are common suspects when ΔT and static look off.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Airflow & Static Check */}
+                <div className="glass p-8 rounded-[2rem] flex flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                        Airflow &amp; Static Check
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        Design airflow and static vs measured. Airflow estimate is approximate – always confirm with manufacturer tables when possible.
+                      </p>
+                    </div>
+                    <i className="fa-solid fa-fan text-sky-300 text-2xl"></i>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Design Airflow (CFM)
+                      </label>
+                      <input
+                        type="number"
+                        step="10"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.designCfm}
+                        onChange={(e) => updateAirflowField("designCfm", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Design Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.designStatic}
+                        onChange={(e) => updateAirflowField("designStatic", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Return Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.returnStatic}
+                        onChange={(e) => updateAirflowField("returnStatic", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                        Supply Static (in. WC)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                        value={airflow.supplyStatic}
+                        onChange={(e) => updateAirflowField("supplyStatic", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mt-2 text-xs">
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Total External Static
+                      </span>
+                      <span className="text-lg font-semibold text-sky-300">
+                        {airflowData.tesp !== null ? airflowData.tesp.toFixed(2) + " in" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Est. Airflow
+                      </span>
+                      <span className="text-lg font-semibold text-emerald-300">
+                        {airflowData.estCfm !== null ? Math.round(airflowData.estCfm) + " CFM" : "--"}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl px-3 py-3 border border-white/5">
+                      <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+                        Static Status
+                      </span>
+                      <span className={`text-lg font-semibold ${airflowData.statusColor}`}>
+                        {airflowData.statusLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {airflowData.statusNote}
+                  </p>
                 </div>
               </section>
             </main>
