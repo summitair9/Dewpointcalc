@@ -249,10 +249,10 @@
       .title {
         font-size: 1.1rem;
       }
-      /* MOBILE ALIGNMENT ADJUSTMENT */
+      /* MOBILE ALIGNMENT ADJUSTMENT – back.png put back where it was */
       .wheel.back {
         background-position-x: calc(50% + 3px);
-        background-position-y: calc(50% + 23px);
+        background-position-y: calc(50% + 25px);
       }
     }
   </style>
@@ -481,7 +481,7 @@
     const angleReadout = document.getElementById("angleReadout");
 
     let isDragging = false;
-    let startAngle = 0;
+       let startAngle = 0;
     let currentRotation = 0;
 
     function getEventPoint(e) {
