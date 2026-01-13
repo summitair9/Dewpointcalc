@@ -82,13 +82,13 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Back image – stationary WITH INNER DARK RING */
+    /* Back image – stationary WITH INNER DARK RING (DESKTOP BASE) */
     .wheel.back {
       width: calc(100% - 5px);
       height: calc(100% - 5px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 13px); /* moved back down halfway */
+      background-position-y: calc(50% + 25px); /* original desktop position restored */
       z-index: 0;
       box-shadow: 0 0 0 14px #020617 inset;
     }
@@ -243,7 +243,10 @@
       .title {
         font-size: 1.1rem;
       }
-      /* same back.png position on mobile */
+      /* MOBILE-ONLY tweak: nudge back.png up a bit */
+      .wheel.back {
+        background-position-y: calc(50% + 18px);
+      }
     }
   </style>
 </head>
