@@ -82,7 +82,7 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Back image – stationary (aligned) WITH INNER DARK RING */
+    /* Back image – stationary WITH INNER DARK RING */
     .wheel.back {
       width: calc(100% - 5px);
       height: calc(100% - 5px);
@@ -90,7 +90,6 @@
       background-position-x: calc(50% + 3px);
       background-position-y: calc(50% + 25px);
       z-index: 0;
-      /* Dark inner ring closing gap toward the front wheel */
       box-shadow: 0 0 0 14px #020617 inset;
     }
 
@@ -249,6 +248,11 @@
       }
       .title {
         font-size: 1.1rem;
+      }
+      /* MOBILE ALIGNMENT ADJUSTMENT */
+      .wheel.back {
+        background-position-x: calc(50% + 3px);
+        background-position-y: calc(50% + 23px);
       }
     }
   </style>
