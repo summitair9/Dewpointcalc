@@ -82,7 +82,7 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Back image – stationary WITH INNER DARK RING */
+    /* Back image – stationary (aligned) WITH INNER DARK RING */
     .wheel.back {
       width: calc(100% - 5px);
       height: calc(100% - 5px);
@@ -90,6 +90,7 @@
       background-position-x: calc(50% + 3px);
       background-position-y: calc(50% + 25px);
       z-index: 0;
+      /* Dark inner ring closing gap toward the front wheel */
       box-shadow: 0 0 0 14px #020617 inset;
     }
 
@@ -111,6 +112,12 @@
       margin-top: 0.25rem;
       font-size: 0.9rem;
       opacity: 0.85;
+    }
+
+    .divider {
+      margin: 0.8rem 0 0.6rem;
+      border: 0;
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
     }
 
     /* DIGITAL SECTION */
@@ -243,7 +250,6 @@
       .title {
         font-size: 1.1rem;
       }
-      /* NO special wheel.back override here – same position as desktop */
     }
   </style>
 </head>
@@ -858,3 +864,5 @@
   </script>
 </body>
 </html>
+
+
