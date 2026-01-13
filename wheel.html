@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Duct Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #020617;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e5e7eb;
+    }
+    .app {
+      text-align: center;
+      max-width: 390px;
+      width: 100%;
+      padding: 0.5rem;
+    }
+    .app-card {
+      background: radial-gradient(circle at top, #1f2937 0, #020617 60%);
+      border-radius: 18px;
+      padding: 0rem 0rem 0.2rem;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+    .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+    }
+    .title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .mode-select {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+    }
+
+    .section-title {
+      margin: 0.5rem 0 0.4rem;
+      font-size: 1rem;
+      font-weight: 600;
+      opacity: 0.9;
+      text-align: left;
+    }
+
+    /* WHEEL SECTION */
+    #wheelSection {
+      margin-top: 0.25rem;
+    }
+
+    .wheel-container {
+      position: relative;
+      width: min(80vw, 350px);
+      height: min(80vw, 350px);
+      margin: 0.3rem auto 0.6rem;
+      touch-action: none;
+    }
+
+    .wheel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      background-size: cover;
+      background-position: center;
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Back image – stationary (aligned) WITH INNER DARK RING */
+    .wheel.back {
+      width: calc(100% - 5px);
+      height: calc(100% - 5px);
+      background-image: url("back.png");
+      background-position-x: calc(50% + 3px);
+      background-position-y: calc(50% + 25px);
+      z-index: 0;
+      /* Dark inner ring closing gap toward the front wheel */
+      box-shadow: 0 0 0 14px #020617 inset;
+    }
+
+    /* Front image – spinning overlay */
+    .wheel.front {
+      width: calc(100% + 20px);
+      height: calc(100% + 20px);
+      background-image: url("front.png");
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.9);
+      z-index: 2;
+    }
+
+    .hint {
+      margin-top: 0.35rem;
+      font-size: 0.8rem;
+      opacity: 0.75;
+    }
+    .angle-readout {
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+
+    .divider {
+      margin: 0.8rem 0 0.6rem;
+      border: 0;
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    /* DIGITAL SECTION */
+
+    #digitalSection {
+      margin-top: 0.2rem;
+    }
+
+    .controls {
+      margin-bottom: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.8rem;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+    }
+
+    .controls label {
+      opacity: 0.9;
+      font-size: 0.8rem;
+    }
+
+    .controls select,
+    .controls input {
+      padding: 0.15rem 0.45rem;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      min-width: 3.5rem;
+    }
+
+    .controls select {
+      min-width: auto;
+    }
+
+    .controls input[type="number"] {
+      text-align: right;
+      width: 4rem;
+    }
+
+    .controls .group {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .controls .group.highlight {
+      border: 1px solid rgba(56, 189, 248, 0.6);
+    }
+
+    .lock-row {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.8rem;
+      justify-content: center;
+      font-size: 0.78rem;
+      opacity: 0.9;
+    }
+
+    .lock-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .lock-row input[type="checkbox"] {
+      width: 0.85rem;
+      height: 0.85rem;
+      accent-color: #38bdf8;
+    }
+
+    .lock-hint {
+      font-size: 0.75rem;
+      opacity: 0.7;
+      margin-top: 0.2rem;
+    }
+
+    .readouts {
+      margin-top: 0.6rem;
+      font-size: 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.9rem;
+      justify-content: center;
+    }
+
+    .readout-item span.label {
+      opacity: 0.6;
+      margin-right: 0.15rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 0.75rem;
+    }
+
+    .vel-ok { color: #4ade80; }
+    .vel-low { color: #38bdf8; }
+    .vel-high { color: #f97373; }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        max-width: 100%;
+        padding: 0.25rem;
+      }
+      .app-card {
+        padding: 0rem 0rem 0.2rem;
+      }
+      .title-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .title {
+        font-size: 1.1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-card">
+      <div class="title-row">
+        <div class="title">Duct Calculator</div>
+        <select id="modeSelect" class="mode-select">
+          <option value="wheel">Calculator 1 – Wheel</option>
+          <option value="digital">Calculator 2 – Digital</option>
+        </select>
+      </div>
+
+      <!-- CALCULATOR 1: WHEEL -->
+      <div id="wheelSection">
+        <div class="section-title">Spinning Duct Wheel</div>
+
+        <div class="wheel-container" id="wheelContainer">
+          <div class="wheel back"></div>
+          <div class="wheel front" id="frontWheel"></div>
+        </div>
+        <div class="hint">Drag (mouse or finger) to spin the front wheel.</div>
+        <div class="angle-readout" id="angleReadout">Angle: 0°</div>
+      </div>
+
+      <!-- CALCULATOR 2: DIGITAL -->
+      <div id="digitalSection" class="hidden">
+        <div class="section-title">Digital Duct Calculator</div>
+        <p class="section-help">
+          Pick duct type, friction, velocity &amp; CFM. The first unlocked value will auto-adjust.
+        </p>
+
+        <div class="controls">
+          <div class="group">
+            <label for="ductType">Type</label>
+            <select id="ductType">
+              <option value="metal">Galv. metal</option>
+              <option value="flex">Wire helix flex</option>
+              <option value="ductboard">Ductboard</option>
+              <option value="ductliner">Ductliner metal</option>
+            </select>
+          </div>
+
+          <div class="group">
+            <label for="flowType">Air</label>
+            <select id="flowType">
+              <option value="supply">Supply</option>
+              <option value="return">Return</option>
+            </select>
+          </div>
+
+          <div class="group">
+            <label for="frictionInput">Friction</label>
+            <input
+              id="frictionInput"
+              type="number"
+              min="0.01"
+              max="0.25"
+              step="0.005"
+              value="0.100"
+            />
+            <span>in.wg/100ft</span>
+          </div>
+
+          <div class="group highlight">
+            <label for="velocityPreset">Velocity</label>
+            <select id="velocityPreset">
+              <option value="res" selected>Residential</option>
+              <option value="com">Commercial</option>
+              <option value="ind">Industrial</option>
+            </select>
+            <input
+              id="velocityInput"
+              type="number"
+              min="200"
+              max="2500"
+              step="10"
+              value="500"
+            />
+            <span>fpm</span>
+          </div>
+
+          <div class="group">
+            <label for="shapeSelect">Shape</label>
+            <select id="shapeSelect">
+              <option value="round">Round</option>
+              <option value="rect">Rectangular</option>
+            </select>
+          </div>
+
+          <div class="group" id="roundGroup">
+            <label for="roundSize">Ø</label>
+            <input
+              id="roundSize"
+              type="number"
+              min="4"
+              max="40"
+              step="1"
+              value="12"
+            />
+            <span>in</span>
+          </div>
+
+          <div class="group hidden" id="rectGroup">
+            <label for="rectW">W×H</label>
+            <input
+              id="rectW"
+              type="number"
+              min="4"
+              max="60"
+              step="1"
+              value="12"
+            />
+            <span>×</span>
+            <input
+              id="rectH"
+              type="number"
+              min="4"
+              max="60"
+              step="1"
+              value="12"
+            />
+            <span>in</span>
+          </div>
+
+          <div class="group">
+            <label for="cfmInput">CFM</label>
+            <input
+              id="cfmInput"
+              type="number"
+              min="50"
+              max="10000"
+              step="5"
+              value="1000"
+            />
+            <span>CFM</span>
+          </div>
+        </div>
+
+        <div class="lock-row">
+          <span class="badge">Lock:</span>
+          <label>
+            <input id="lockFriction" type="checkbox" checked />
+            Friction
+          </label>
+          <label>
+            <input id="lockVelocity" type="checkbox" checked />
+            Velocity
+          </label>
+          <label>
+            <input id="lockCfm" type="checkbox" checked />
+            CFM
+          </label>
+          <label>
+            <input id="lockDuct" type="checkbox" />
+            Duct size
+          </label>
+        </div>
+        <div class="lock-hint">
+          You can lock or unlock any combination, but at least one must stay unlocked.
+          The first unlocked (Duct → Velocity → Friction → CFM) will auto-calc.
+        </div>
+
+        <div class="readouts">
+          <div class="readout-item">
+            <span class="label">Type:</span>
+            <span id="digTypeReadout">Galv. metal</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">Air:</span>
+            <span id="digFlowReadout">Supply</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">Friction:</span>
+            <span id="digFrictionReadout">0.100 in.wg/100ft</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">Duct:</span>
+            <span id="digDuctReadout">12" round</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">Eq. round:</span>
+            <span id="digEqRoundReadout">--</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">Velocity:</span>
+            <span id="digVelReadout" class="vel-ok">500 fpm</span>
+          </div>
+          <div class="readout-item">
+            <span class="label">CFM:</span>
+            <span id="digCfmReadout">-- CFM</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*********************
+     * MODE SWITCHING
+     *********************/
+    const modeSelect = document.getElementById("modeSelect");
+    const wheelSection = document.getElementById("wheelSection");
+    const digitalSection = document.getElementById("digitalSection");
+
+    function updateMode() {
+      const mode = modeSelect.value;
+      if (mode === "wheel") {
+        wheelSection.classList.remove("hidden");
+        digitalSection.classList.add("hidden");
+      } else {
+        wheelSection.classList.add("hidden");
+        digitalSection.classList.remove("hidden");
+      }
+    }
+    modeSelect.addEventListener("change", updateMode);
+    updateMode();
+
+    /*********************
+     * CALCULATOR 1: WHEEL
+     *********************/
+    const container = document.getElementById("wheelContainer");
+    const frontWheel = document.getElementById("frontWheel");
+    const angleReadout = document.getElementById("angleReadout");
+
+    let isDragging = false;
+    let startAngle = 0;
+    let currentRotation = 0;
+
+    function getEventPoint(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    function getAngleFromCenterWheel(e) {
+      const rect = container.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const point = getEventPoint(e);
+      const dx = point.x - centerX;
+      const dy = point.y - centerY;
+      let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
+      return angle;
+    }
+
+    function setRotation(angle) {
+      currentRotation = angle;
+      frontWheel.style.transform = `translate(-50%, -50%) rotate(${currentRotation}deg)`;
+      angleReadout.textContent = `Angle: ${currentRotation.toFixed(1)}°`;
+    }
+
+    function handleStart(e) {
+      e.preventDefault();
+      isDragging = true;
+      const angle = getAngleFromCenterWheel(e);
+      startAngle = angle - currentRotation;
+    }
+
+    function handleMove(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      const angle = getAngleFromCenterWheel(e);
+      const newRotation = angle - startAngle;
+      setRotation(newRotation);
+    }
+
+    function handleEnd() {
+      isDragging = false;
+    }
+
+    if (window.PointerEvent) {
+      container.addEventListener("pointerdown", handleStart);
+      container.addEventListener("pointermove", handleMove);
+      container.addEventListener("pointerup", handleEnd);
+      container.addEventListener("pointerleave", handleEnd);
+    } else {
+      container.addEventListener("touchstart", handleStart, { passive: false });
+      container.addEventListener("touchmove", handleMove, { passive: false });
+      container.addEventListener("touchend", handleEnd, { passive: false });
+      container.addEventListener("mousedown", handleStart);
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleEnd);
+    }
+
+    /*************************
+     * CALCULATOR 2: DIGITAL
+     *************************/
+    const ductTypeSelect = document.getElementById("ductType");
+    const flowTypeSelect = document.getElementById("flowType");
+    const frictionInput = document.getElementById("frictionInput");
+    const velocityPreset = document.getElementById("velocityPreset");
+    const velocityInput = document.getElementById("velocityInput");
+    const shapeSelect = document.getElementById("shapeSelect");
+    const roundGroup = document.getElementById("roundGroup");
+    const rectGroup = document.getElementById("rectGroup");
+    const roundSizeInput = document.getElementById("roundSize");
+    const rectWInput = document.getElementById("rectW");
+    const rectHInput = document.getElementById("rectH");
+    const cfmInput = document.getElementById("cfmInput");
+
+    const digTypeReadout = document.getElementById("digTypeReadout");
+    const digFlowReadout = document.getElementById("digFlowReadout");
+    const digFrictionReadout = document.getElementById("digFrictionReadout");
+    const digDuctReadout = document.getElementById("digDuctReadout");
+    const digEqRoundReadout = document.getElementById("digEqRoundReadout");
+    const digVelReadout = document.getElementById("digVelReadout");
+    const digCfmReadout = document.getElementById("digCfmReadout");
+
+    const lockFriction = document.getElementById("lockFriction");
+    const lockVelocity = document.getElementById("lockVelocity");
+    const lockCfm = document.getElementById("lockCfm");
+    const lockDuct = document.getElementById("lockDuct");
+
+    const ductTypeNames = {
+      metal: "Galv. metal",
+      flex: "Wire helix flex",
+      ductboard: "Ductboard",
+      ductliner: "Ductliner metal"
+    };
+
+    const baseVelByType = {
+      metal: 900,
+      flex: 700,
+      ductboard: 800,
+      ductliner: 850
+    };
+
+    let lockedDuctAreaFt2 = null;
+
+    function computeAreaFt2(shape, dIn, wIn, hIn) {
+      if (shape === "round") {
+        const dFt = dIn / 12;
+        return Math.PI * (dFt / 2) * (dFt / 2);
+      } else {
+        const wFt = wIn / 12;
+        const hFt = hIn / 12;
+        return wFt * hFt;
+      }
+    }
+
+    function enforceShapeTypeRules() {
+      if (ductTypeSelect.value === "flex") {
+        shapeSelect.value = "round";
+        shapeSelect.disabled = true;
+        roundGroup.classList.remove("hidden");
+        rectGroup.classList.add("hidden");
+      } else {
+        shapeSelect.disabled = false;
+        if (shapeSelect.value === "rect") {
+          roundGroup.classList.add("hidden");
+          rectGroup.classList.remove("hidden");
+        } else {
+          roundGroup.classList.remove("hidden");
+          rectGroup.classList.add("hidden");
+        }
+      }
+
+      if (shapeSelect.value === "rect" && ductTypeSelect.value === "flex") {
+        ductTypeSelect.value = "metal";
+      }
+    }
+
+    function getSolveForVar() {
+      if (!lockDuct.checked) return "duct";
+      if (!lockVelocity.checked) return "velocity";
+      if (!lockFriction.checked) return "friction";
+      if (!lockCfm.checked) return "cfm";
+      return "duct";
+    }
+
+    function enforceLocks() {
+      const locks = [lockFriction, lockVelocity, lockCfm, lockDuct];
+      if (locks.every(cb => cb.checked)) {
+        lockDuct.checked = false;
+      }
+    }
+
+    function updateInputDisabledStates() {
+      const solveFor = getSolveForVar();
+
+      const ductSolving = solveFor === "duct";
+      const velSolving = solveFor === "velocity";
+      const fricSolving = solveFor === "friction";
+      const cfmSolving  = solveFor === "cfm";
+
+      roundSizeInput.disabled = ductSolving;
+      rectWInput.disabled = ductSolving;
+      rectHInput.disabled = ductSolving;
+
+      velocityInput.disabled = velSolving;
+      velocityPreset.disabled = velSolving;
+
+      frictionInput.disabled = fricSolving;
+      cfmInput.disabled = cfmSolving;
+    }
+
+    function getPresetVelocityValue() {
+      const preset = velocityPreset.value;
+      const flow = flowTypeSelect.value;
+
+      if (preset === "res") {
+        return flow === "supply" ? 500 : 900;
+      } else if (preset === "com") {
+        return flow === "supply" ? 900 : 1100;
+      } else if (preset === "ind") {
+        return flow === "supply" ? 1100 : 1600;
+      }
+      return 900;
+    }
+
+    function applyVelocityPreset() {
+      const v = getPresetVelocityValue();
+      velocityInput.value = v;
+      solveSystem();
+    }
+
+    function solveSystem() {
+      enforceShapeTypeRules();
+
+      let ductType = ductTypeSelect.value;
+      let friction = parseFloat(frictionInput.value) || 0.10;
+      let velocity = parseFloat(velocityInput.value) || getPresetVelocityValue();
+      let cfm = parseFloat(cfmInput.value) || 1000;
+      let shape = shapeSelect.value;
+
+      let dIn = parseFloat(roundSizeInput.value) || 12;
+      let wIn = parseFloat(rectWInput.value) || 12;
+      let hIn = parseFloat(rectHInput.value) || 12;
+
+      friction = Math.max(0.01, Math.min(0.25, friction));
+      velocity = Math.max(200, Math.min(2500, velocity));
+      dIn = Math.max(4, Math.min(40, dIn));
+      wIn = Math.max(4, Math.min(60, wIn));
+      hIn = Math.max(4, Math.min(60, hIn));
+      cfm = Math.max(50, Math.min(10000, cfm));
+
+      frictionInput.value = friction.toFixed(3);
+      velocityInput.value = Math.round(velocity);
+      roundSizeInput.value = dIn.toFixed(0);
+      rectWInput.value = wIn.toFixed(0);
+      rectHInput.value = hIn.toFixed(0);
+      cfmInput.value = Math.round(cfm / 5) * 5;
+
+      const solveFor = getSolveForVar();
+
+      let areaFt2 = computeAreaFt2(shape, dIn, wIn, hIn);
+
+      if (solveFor === "duct") {
+        if (velocity > 0) {
+          areaFt2 = cfm / velocity;
+          const areaIn2 = areaFt2 * 144;
+          if (shape === "round") {
+            const d = Math.sqrt((4 * areaIn2) / Math.PI);
+            dIn = Math.max(4, Math.min(40, d));
+            roundSizeInput.value = dIn.toFixed(0);
+          } else {
+            const ratio = wIn / hIn || 1;
+            const w = Math.sqrt(areaIn2 * ratio);
+            const h = w / ratio;
+            wIn = Math.max(4, Math.min(60, w));
+            hIn = Math.max(4, Math.min(60, h));
+            rectWInput.value = wIn.toFixed(0);
+            rectHInput.value = hIn.toFixed(0);
+          }
+          areaFt2 = computeAreaFt2(shape, dIn, wIn, hIn);
+        }
+      } else if (solveFor === "velocity") {
+        if (areaFt2 > 0) {
+          velocity = cfm / areaFt2;
+          velocity = Math.max(200, Math.min(2500, velocity));
+          velocityInput.value = Math.round(velocity);
+        }
+      } else if (solveFor === "cfm") {
+        cfm = areaFt2 * velocity;
+        cfm = Math.max(50, Math.min(10000, cfm));
+        cfm = Math.round(cfm / 5) * 5;
+        cfmInput.value = cfm;
+      } else if (solveFor === "friction") {
+        const baseVel = baseVelByType[ductType] || 900;
+        friction = 0.10 * Math.pow(velocity / baseVel, 2);
+        friction = Math.max(0.01, Math.min(0.25, friction));
+        frictionInput.value = friction.toFixed(3);
+      }
+
+      friction = parseFloat(frictionInput.value);
+      velocity = parseFloat(velocityInput.value);
+      cfm = parseFloat(cfmInput.value);
+      dIn = parseFloat(roundSizeInput.value);
+      wIn = parseFloat(rectWInput.value);
+      hIn = parseFloat(rectHInput.value);
+      areaFt2 = computeAreaFt2(shape, dIn, wIn, hIn);
+
+      if (lockDuct.checked) {
+        lockedDuctAreaFt2 = areaFt2;
+      } else {
+        lockedDuctAreaFt2 = null;
+      }
+
+      const areaIn2 = areaFt2 * 144;
+      const eqD = Math.sqrt((4 * areaIn2) / Math.PI);
+      digEqRoundReadout.textContent = eqD.toFixed(1) + '"';
+
+      digTypeReadout.textContent = ductTypeNames[ductType] || ductType;
+      digFlowReadout.textContent =
+        flowTypeSelect.value === "supply" ? "Supply" : "Return";
+      digFrictionReadout.textContent = friction.toFixed(3) + " in.wg/100ft";
+      if (shape === "round") {
+        digDuctReadout.textContent = `${dIn.toFixed(0)}" round`;
+      } else {
+        digDuctReadout.textContent =
+          `${wIn.toFixed(0)}" × ${hIn.toFixed(0)}" rect`;
+      }
+
+      digVelReadout.classList.remove("vel-ok", "vel-low", "vel-high");
+      let statusClass;
+      if (velocity < 500) {
+        statusClass = "vel-low";
+      } else if (velocity > 1200) {
+        statusClass = "vel-high";
+      } else {
+        statusClass = "vel-ok";
+      }
+      digVelReadout.classList.add(statusClass);
+      digVelReadout.textContent = Math.round(velocity) + " fpm";
+
+      digCfmReadout.textContent = Math.round(cfm / 5) * 5 + " CFM";
+    }
+
+    function autoAdjustRectFromW() {
+      if (!lockDuct.checked) return;
+      if (shapeSelect.value !== "rect") return;
+
+      let wIn = parseFloat(rectWInput.value) || 12;
+      wIn = Math.max(4, Math.min(60, wIn));
+      rectWInput.value = wIn.toFixed(0);
+
+      let areaFt2 =
+        lockedDuctAreaFt2 ??
+        computeAreaFt2("rect", 0, wIn, parseFloat(rectHInput.value) || 12);
+      const areaIn2 = areaFt2 * 144;
+
+      const hIn = Math.max(4, Math.min(60, areaIn2 / wIn));
+      rectHInput.value = hIn.toFixed(0);
+    }
+
+    function autoAdjustRectFromH() {
+      if (!lockDuct.checked) return;
+      if (shapeSelect.value !== "rect") return;
+
+      let hIn = parseFloat(rectHInput.value) || 12;
+      hIn = Math.max(4, Math.min(60, hIn));
+      rectHInput.value = hIn.toFixed(0);
+
+      let areaFt2 =
+        lockedDuctAreaFt2 ??
+        computeAreaFt2("rect", 0, parseFloat(rectWInput.value) || 12, hIn);
+      const areaIn2 = areaFt2 * 144;
+
+      const wIn = Math.max(4, Math.min(60, areaIn2 / hIn));
+      rectWInput.value = wIn.toFixed(0);
+    }
+
+    function onLockChange() {
+      enforceLocks();
+      updateInputDisabledStates();
+      solveSystem();
+    }
+
+    [lockFriction, lockVelocity, lockCfm, lockDuct].forEach(cb => {
+      cb.addEventListener("change", onLockChange);
+    });
+    enforceLocks();
+    updateInputDisabledStates();
+
+    ductTypeSelect.addEventListener("change", () => {
+      enforceShapeTypeRules();
+      solveSystem();
+    });
+
+    flowTypeSelect.addEventListener("change", applyVelocityPreset);
+
+    shapeSelect.addEventListener("change", () => {
+      enforceShapeTypeRules();
+      solveSystem();
+    });
+
+    frictionInput.addEventListener("change", solveSystem);
+
+    velocityPreset.addEventListener("change", applyVelocityPreset);
+
+    velocityInput.addEventListener("change", solveSystem);
+
+    roundSizeInput.addEventListener("change", solveSystem);
+
+    rectWInput.addEventListener("change", () => {
+      autoAdjustRectFromW();
+      solveSystem();
+    });
+
+    rectHInput.addEventListener("change", () => {
+      autoAdjustRectFromH();
+      solveSystem();
+    });
+
+    cfmInput.addEventListener("change", solveSystem);
+
+    applyVelocityPreset();
+  </script>
+</body>
+</html>
