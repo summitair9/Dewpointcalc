@@ -62,7 +62,6 @@
   <script type="text/babel" data-presets="env,react">
     const { useState, useEffect, useMemo } = React;
 
-    // --------- ENUM & HELPERS ----------
     const TemperatureUnit = {
       CELSIUS: "C",
       FAHRENHEIT: "F",
@@ -93,7 +92,6 @@
       return { label: "Oppressive", color: "text-red-500", level: 5 };
     }
 
-    // Simple local description (no external AI)
     function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
       const unitSymbol = "°" + unit;
       if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
@@ -111,7 +109,6 @@
       return "Heavy, saturated air pressing close against your skin at " + temp + unitSymbol + ".";
     }
 
-    // DB/WB -> RH, Dew, Coil Sat
     function calcDbWbHelper(dbF, wbF) {
       const db = parseFloat(dbF);
       const wb = parseFloat(wbF);
@@ -142,7 +139,6 @@
       };
     }
 
-    // ----- Base PT curves (approximate, 40–100°F band) -----
     const PT_BASE_R22 = [
       { t: 40, p: 68.6 },
       { t: 50, p: 84.1 },
@@ -193,7 +189,6 @@
       { t: 100, p: 236.8 },
     ];
 
-    // CO2 rough curve (very approximate)
     const PT_BASE_R744 = [
       { t: 40, p: 617 },
       { t: 50, p: 699 },
@@ -204,9 +199,7 @@
       { t: 100, p: 1250 },
     ];
 
-    // Multi-refrigerant PT curves mapped to base families
     const PT_DATA = {
-      // R-22 / mid-temp HCFC family & close drop-ins
       "R-22": PT_BASE_R22,
       "R-438A / MO99": PT_BASE_R22,
       "R-422D": PT_BASE_R22,
@@ -219,7 +212,6 @@
       "R-424A / RS-44": PT_BASE_R22,
       "R-290 / Propane": PT_BASE_R22,
 
-      // R-410A / high pressure HFC/A2L family
       "R-410A": PT_BASE_R410A,
       "R-32": PT_BASE_R410A,
       "R-454B": PT_BASE_R410A,
@@ -228,7 +220,6 @@
       "R-454C": PT_BASE_R410A,
       "R-466A": PT_BASE_R410A,
 
-      // R-404A / low-temp rack family
       "R-404A": PT_BASE_R404A,
       "R-507A": PT_BASE_R404A,
       "R-448A": PT_BASE_R404A,
@@ -236,17 +227,14 @@
       "R-449B": PT_BASE_R404A,
       "R-452A": PT_BASE_R404A,
 
-      // R-134a / HFO family
       "R-12": PT_BASE_R134A,
       "R-134a": PT_BASE_R134A,
       "R-513A": PT_BASE_R134A,
       "R-1234yf": PT_BASE_R134A,
       "R-1234ze": PT_BASE_R134A,
 
-      // Low pressure chiller & misc – approximate with R-134a band for 40–100°F
       "R-123": PT_BASE_R134A,
 
-      // Naturals
       "R-600a / Isobutane": PT_BASE_R134A,
       "R-717 / Ammonia": PT_BASE_R22,
       "R-744 / CO2": PT_BASE_R744,
@@ -288,9 +276,7 @@
       return null;
     }
 
-    // ------------- APP -------------
     function App() {
-      // main state (default °F)
       const [state, setState] = useState({
         temperature: 72,
         humidity: 50,
@@ -302,7 +288,6 @@
       );
       const [loadingAi, setLoadingAi] = useState(false);
 
-      // outdoor temp (from Open-Meteo, stored as °C)
       const [outdoorTempC, setOutdoorTempC] = useState(null);
       const [outdoorLoading, setOutdoorLoading] = useState(false);
       const [locationName, setLocationName] = useState("Local");
@@ -318,13 +303,9 @@
         { key: "chi", label: "Chicago, IL", type: "fixed", lat: 41.8781, lon: -87.6298 },
       ];
 
-      // DB/WB state
       const [dbwb, setDbwb] = useState({ db: 75, wb: 63 });
-
-      // ΔT state
       const [dt, setDt] = useState({ returnDb: 75, supplyDb: 55 });
 
-      // airflow/static state
       const [airflow, setAirflow] = useState({
         designCfm: 400,
         designStatic: 0.5,
@@ -332,7 +313,6 @@
         supplyStatic: 0.22,
       });
 
-      // PT helper state
       const [pt, setPt] = useState(() => {
         const ref = "R-410A";
         const t = 40;
@@ -344,12 +324,12 @@
         };
       });
 
-      // sections for jump to card
       const sectionOptions = [
         { id: "section-evap-dbwb", label: "Evap Coil Target (DB/WB)" },
         { id: "section-dt", label: "ΔT Across Coil" },
         { id: "section-airflow", label: "Airflow & Static" },
         { id: "section-pt", label: "PT Helper" },
+        { id: "section-duct-calculator", label: "Duct Calculator" },
       ];
 
       function scrollToSection(id) {
@@ -359,7 +339,6 @@
         }
       }
 
-      // derived: dewpoint etc
       const tempC = useMemo(
         () =>
           state.unit === TemperatureUnit.CELSIUS
@@ -383,13 +362,11 @@
 
       const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
 
-      // DB/WB results
       const dbwbRes = useMemo(
         () => calcDbWbHelper(dbwb.db, dbwb.wb),
         [dbwb.db, dbwb.wb]
       );
 
-      // ΔT results
       const deltaT = useMemo(() => {
         const r = parseFloat(dt.returnDb);
         const s = parseFloat(dt.supplyDb);
@@ -407,7 +384,6 @@
 
       const deltaInfo = classifyDeltaT(deltaT);
 
-      // airflow/static derived
       const airflowInfo = useMemo(() => {
         const designCfm = parseFloat(airflow.designCfm);
         const designStatic = parseFloat(airflow.designStatic);
@@ -459,7 +435,6 @@
         airflow.supplyStatic,
       ]);
 
-      // simple “Airflow vs Charge” hint
       const airflowHint = useMemo(() => {
         if (deltaT == null || airflowInfo.tesp == null) {
           return "Enter ΔT and static to see a quick airflow vs charge hint.";
@@ -482,7 +457,6 @@
         return "Mixed signals – use these numbers as a compass, not a verdict.";
       }, [deltaT, airflowInfo, deltaInfo]);
 
-      // outdoor temp fetch
       async function fetchWeather(lat, lon) {
         try {
           setOutdoorLoading(true);
@@ -530,7 +504,6 @@
         }
       }
 
-      // on load: try local
       useEffect(() => {
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
@@ -539,14 +512,11 @@
               setSelectedLocationKey("local");
               fetchWeather(pos.coords.latitude, pos.coords.longitude);
             },
-            () => {
-              // ignore if denied
-            }
+            () => {}
           );
         }
       }, []);
 
-      // display outdoor temp in current unit
       const displayOutdoor = useMemo(() => {
         if (outdoorTempC == null) return null;
         if (state.unit === TemperatureUnit.CELSIUS) {
@@ -555,7 +525,6 @@
         return Math.round(((outdoorTempC * 9) / 5 + 32) * 10) / 10;
       }, [outdoorTempC, state.unit]);
 
-      // local “AI” text
       useEffect(() => {
         setLoadingAi(true);
         const id = setTimeout(() => {
@@ -571,7 +540,6 @@
         return () => clearTimeout(id);
       }, [state.temperature, state.humidity, dewPointDisplay, state.unit]);
 
-      // handlers
       function toggleUnit() {
         setState((prev) => {
           const newUnit =
@@ -668,7 +636,6 @@
           setLocationName(loc.label);
           fetchWeather(loc.lat, loc.lon);
         } else if (loc.type === "custom") {
-          // wait for user to type city and press "Use"
         }
       }
 
@@ -679,7 +646,6 @@
         fetchCityWeather(name);
       }
 
-      // logo
       function Logo() {
         return (
           <div className="flex items-center gap-4">
@@ -754,16 +720,13 @@
 
       return (
         <div className="min-h-screen flex flex-col p-6 md:p-12 relative overflow-hidden">
-          {/* background glow */}
           <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px]"></div>
 
-          {/* header */}
           <div className="w-full flex flex-col md:flex-row justify-between items-center mb-12 relative z-10 gap-8">
             <Logo />
 
             <div className="flex flex-col md:flex-row items-stretch gap-4 relative z-20">
-              {/* outdoor widget + NEW select + custom city */}
               <div className="glass px-6 py-4 rounded-3xl flex flex-col items-stretch shadow-xl border-sky-500/10 relative z-30 min-w-[230px]">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
                   Outdoor Temp Source
@@ -805,7 +768,7 @@
 
                 <div className="flex items-center gap-3 mt-1">
                   {outdoorLoading ? (
-                    <div className="h-8 w-16 bg-white/5 animate-pulse rounded-lg"></div>
+                    <div className="h-8 w-16 bg_white/5 animate-pulse rounded-lg"></div>
                   ) : displayOutdoor != null ? (
                     <div className="text-3xl font-bold glow-text">
                       {displayOutdoor}
@@ -822,7 +785,6 @@
                 </span>
               </div>
 
-              {/* jump to card */}
               <div className="glass px-4 py-3 rounded-3xl flex flex-col justify-center shadow-xl border-sky-500/10 relative z-10">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
                   Jump to Card
@@ -851,7 +813,6 @@
             </div>
           </div>
 
-          {/* title */}
           <div className="flex flex-col items-center relative z-10 mb-10">
             <h1 className="text-4xl md:text-7xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 mb-2">
               DEWPOINT<span className="text-white">.</span>
@@ -861,11 +822,8 @@
             </p>
           </div>
 
-          {/* main */}
           <main className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
-            {/* left: main atmosphere */}
             <section className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col gap-8 shadow-2xl">
-              {/* temp */}
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <div>
@@ -896,7 +854,6 @@
                 />
               </div>
 
-              {/* humidity */}
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <div>
@@ -920,7 +877,6 @@
                 />
               </div>
 
-              {/* description */}
               <div className="mt-auto pt-6 border-t border-white/5">
                 <div className="flex items-start gap-3 italic text-slate-300 min-h-[50px]">
                   <i className="fa-solid fa-sparkles text-sky-400 mt-1 text-lg"></i>
@@ -937,9 +893,7 @@
               </div>
             </section>
 
-            {/* right column */}
             <section className="flex flex-col gap-8">
-              {/* dewpoint */}
               <div className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden">
                 <label className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-slate-500 mb-4">
                   Calculated Dew Point
@@ -968,7 +922,6 @@
                 </div>
               </div>
 
-              {/* saturation + vapor */}
               <div className="glass p-6 rounded-[2rem] grid grid-cols-2 gap-4">
                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                   <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
@@ -1002,12 +955,11 @@
                 </div>
               </div>
 
-              {/* Evap coil target (DB/WB) */}
               <div
                 id="section-evap-dbwb"
                 className="glass p-6 rounded-[2rem] flex flex-col gap-4"
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify_between gap-4">
                   <div>
                     <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
                       Evap Coil Target (DB/WB)
@@ -1080,7 +1032,6 @@
                 </p>
               </div>
 
-              {/* ΔT across coil */}
               <div
                 id="section-dt"
                 className="glass p-6 rounded-[2rem] flex flex-col gap-4"
@@ -1150,7 +1101,6 @@
                 </div>
               </div>
 
-              {/* airflow & static */}
               <div
                 id="section-airflow"
                 className="glass p-6 rounded-[2rem] flex flex-col gap-4"
@@ -1270,7 +1220,6 @@
                 </p>
               </div>
 
-              {/* PT helper */}
               <div
                 id="section-pt"
                 className="glass p-6 rounded-[2rem] flex flex-col gap-4"
@@ -1285,7 +1234,7 @@
                       PT in the 40–100°F band.
                     </p>
                   </div>
-                <i className="fa-solid fa-chart-line text-sky-300 text-xl"></i>
+                  <i className="fa-solid fa-chart-line text-sky-300 text-xl"></i>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -1340,6 +1289,37 @@
                   manufacturer PT chart for the exact refrigerant and blend.
                 </p>
               </div>
+
+              {/* DUCT CALCULATOR CARD */}
+              <div
+                id="section-duct-calculator"
+                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                      Duct Calculator
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Interactive spinning duct wheel embedded below.
+                    </p>
+                  </div>
+                  <i className="fa-solid fa-circle-notch text-sky-300 text-xl"></i>
+                </div>
+                <div className="w-full rounded-2xl overflow-hidden border border-white/10 bg-black">
+                  <iframe
+                    src="wheel.html"
+                    style={{
+                      width: "100%",
+                      height: "600px",
+                      border: "none",
+                      borderRadius: "12px",
+                      background: "#000",
+                    }}
+                    title="Duct Calculator Wheel"
+                  ></iframe>
+                </div>
+              </div>
             </section>
           </main>
 
@@ -1357,10 +1337,3 @@
   </script>
 </body>
 </html>
-<!-- START DUCT CALCULATOR -->
-<hr style="margin:40px 0;border:0;border-top:1px solid #444;">
-<div style="padding:12px 0;color:#fff;font-size:20px;font-weight:bold;text-align:center;">
-  Duct Calculator
-</div>
-<iframe src="wheel.html" style="width:100%;height:600px;border:none;border-radius:12px;background:#000;"></iframe>
-<!-- END DUCT CALCULATOR -->
