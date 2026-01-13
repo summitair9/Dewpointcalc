@@ -113,12 +113,6 @@
       opacity: 0.85;
     }
 
-    .divider {
-      margin: 0.8rem 0 0.6rem;
-      border: 0;
-      border-top: 1px solid rgba(148, 163, 184, 0.35);
-    }
-
     /* DIGITAL SECTION */
 
     #digitalSection {
@@ -249,11 +243,7 @@
       .title {
         font-size: 1.1rem;
       }
-      /* MOBILE ALIGNMENT ADJUSTMENT – back.png put back where it was */
-      .wheel.back {
-        background-position-x: calc(50% + 3px);
-        background-position-y: calc(50% + 25px);
-      }
+      /* NO special wheel.back override here – same position as desktop */
     }
   </style>
 </head>
@@ -481,7 +471,7 @@
     const angleReadout = document.getElementById("angleReadout");
 
     let isDragging = false;
-       let startAngle = 0;
+    let startAngle = 0;
     let currentRotation = 0;
 
     function getEventPoint(e) {
