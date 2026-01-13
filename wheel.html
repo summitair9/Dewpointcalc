@@ -82,15 +82,14 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Back image – stationary (aligned) WITH INNER DARK RING */
+    /* Back image – stationary WITH INNER DARK RING */
     .wheel.back {
       width: calc(100% - 5px);
       height: calc(100% - 5px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 25px);
+      background-position-y: calc(50% + 1px); /* moved up */
       z-index: 0;
-      /* Dark inner ring closing gap toward the front wheel */
       box-shadow: 0 0 0 14px #020617 inset;
     }
 
@@ -112,12 +111,6 @@
       margin-top: 0.25rem;
       font-size: 0.9rem;
       opacity: 0.85;
-    }
-
-    .divider {
-      margin: 0.8rem 0 0.6rem;
-      border: 0;
-      border-top: 1px solid rgba(148, 163, 184, 0.35);
     }
 
     /* DIGITAL SECTION */
@@ -250,6 +243,7 @@
       .title {
         font-size: 1.1rem;
       }
+      /* same back.png position on mobile */
     }
   </style>
 </head>
@@ -272,7 +266,7 @@
           <div class="wheel back"></div>
           <div class="wheel front" id="frontWheel"></div>
         </div>
-        <div class="hint">Drag (mouse or finger) to spin the front wheel.</div>
+        <div class="hint">Drag (mouse or finger) to spin the front wheel. Pinch with two fingers to zoom.</div>
         <div class="angle-readout" id="angleReadout">Angle: 0°</div>
       </div>
 
@@ -474,11 +468,27 @@
      *********************/
     const container = document.getElementById("wheelContainer");
     const frontWheel = document.getElementById("frontWheel");
+    const backWheel = document.querySelector(".wheel.back");
     const angleReadout = document.getElementById("angleReadout");
 
     let isDragging = false;
     let startAngle = 0;
     let currentRotation = 0;
+
+    // pinch zoom
+    let isPinching = false;
+    let initialPinchDistance = 0;
+    let initialScale = 1;
+    let currentScale = 1;
+    const MIN_SCALE = 0.6;
+    const MAX_SCALE = 1.6;
+
+    function applyWheelTransforms() {
+      frontWheel.style.transform =
+        `translate(-50%, -50%) rotate(${currentRotation}deg) scale(${currentScale})`;
+      backWheel.style.transform =
+        `translate(-50%, -50%) scale(${currentScale})`;
+    }
 
     function getEventPoint(e) {
       if (e.touches && e.touches.length > 0) {
@@ -501,11 +511,13 @@
 
     function setRotation(angle) {
       currentRotation = angle;
-      frontWheel.style.transform = `translate(-50%, -50%) rotate(${currentRotation}deg)`;
+      applyWheelTransforms();
       angleReadout.textContent = `Angle: ${currentRotation.toFixed(1)}°`;
     }
 
     function handleStart(e) {
+      // don't start drag if pinch
+      if (e.touches && e.touches.length > 1) return;
       e.preventDefault();
       isDragging = true;
       const angle = getAngleFromCenterWheel(e);
@@ -514,6 +526,8 @@
 
     function handleMove(e) {
       if (!isDragging) return;
+      // ignore drag if currently pinching
+      if (isPinching) return;
       e.preventDefault();
       const angle = getAngleFromCenterWheel(e);
       const newRotation = angle - startAngle;
@@ -522,6 +536,43 @@
 
     function handleEnd() {
       isDragging = false;
+    }
+
+    // pinch helpers
+    function getPinchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function handleTouchStart(e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        isPinching = true;
+        isDragging = false;
+        initialPinchDistance = getPinchDistance(e.touches);
+        initialScale = currentScale;
+      }
+    }
+
+    function handleTouchMove(e) {
+      if (isPinching && e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getPinchDistance(e.touches);
+        if (initialPinchDistance <= 0) return;
+        let factor = dist / initialPinchDistance;
+        let newScale = initialScale * factor;
+        if (newScale < MIN_SCALE) newScale = MIN_SCALE;
+        if (newScale > MAX_SCALE) newScale = MAX_SCALE;
+        currentScale = newScale;
+        applyWheelTransforms();
+      }
+    }
+
+    function handleTouchEnd(e) {
+      if (e.touches.length < 2) {
+        isPinching = false;
+      }
     }
 
     if (window.PointerEvent) {
@@ -537,6 +588,16 @@
       document.addEventListener("mousemove", handleMove);
       document.addEventListener("mouseup", handleEnd);
     }
+
+    // touch events for pinch zoom (always)
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
+    container.addEventListener("touchcancel", handleTouchEnd, { passive: false });
+
+    // init transforms
+    applyWheelTransforms();
+    angleReadout.textContent = "Angle: 0°";
 
     /*************************
      * CALCULATOR 2: DIGITAL
@@ -864,5 +925,3 @@
   </script>
 </body>
 </html>
-
-
