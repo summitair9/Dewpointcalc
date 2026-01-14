@@ -88,7 +88,7 @@
       height: calc(100% - 5px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 25px); /* moved DOWN 5px */
+      background-position-y: calc(50% + 27px); /* desktop: DOWN 2px from previous */
       z-index: 0;
       box-shadow: 0 0 0 10px #020617 inset;
     }
@@ -243,7 +243,10 @@
       .title {
         font-size: 1.1rem;
       }
-      /* same back.png alignment as desktop */
+      /* mobile: move back.png UP 2px from previous (25 → 23) */
+      .wheel.back {
+        background-position-y: calc(50% + 23px);
+      }
     }
   </style>
 </head>
