@@ -82,13 +82,13 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Back image – stationary WITH INNER DARK RING (DESKTOP BASE / "PERFECT" ALIGNMENT) */
+    /* Back image – stationary WITH INNER DARK RING */
     .wheel.back {
       width: calc(100% - 5px);
       height: calc(100% - 5px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 20px);
+      background-position-y: calc(50% + 25px); /* moved DOWN 5px */
       z-index: 0;
       box-shadow: 0 0 0 10px #020617 inset;
     }
@@ -243,7 +243,7 @@
       .title {
         font-size: 1.1rem;
       }
-      /* NO extra back.png shift here yet – same alignment as desktop */
+      /* same back.png alignment as desktop */
     }
   </style>
 </head>
