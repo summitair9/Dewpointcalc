@@ -88,7 +88,7 @@
       height: calc(100% - 5px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 27px); /* desktop: DOWN 2px from previous */
+      background-position-y: calc(50% + 27px); /* desktop (perfect) */
       z-index: 0;
       box-shadow: 0 0 0 10px #020617 inset;
     }
@@ -243,9 +243,9 @@
       .title {
         font-size: 1.1rem;
       }
-      /* mobile: move back.png UP 2px from previous (25 → 23) */
+      /* mobile: move back.png UP 5px from previous mobile */
       .wheel.back {
-        background-position-y: calc(50% + 23px);
+        background-position-y: calc(50% + 18px);
       }
     }
   </style>
