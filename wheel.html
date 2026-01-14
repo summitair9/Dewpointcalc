@@ -243,9 +243,9 @@
       .title {
         font-size: 1.1rem;
       }
-      /* mobile: move back.png UP 2 more pixels (closer to center) */
+      /* mobile: move back.png DOWN 2px from previous (8px → 10px) */
       .wheel.back {
-        background-position-y: calc(50% + 8px);
+        background-position-y: calc(50% + 10px);
       }
     }
   </style>
@@ -425,7 +425,7 @@
             <span id="digFrictionReadout">0.100 in.wg/100ft</span>
           </div>
           <div class="readout-item">
-            <span className="label">Duct:</span>
+            <span class="label">Duct:</span>
             <span id="digDuctReadout">12" round</span>
           </div>
           <div class="readout-item">
