@@ -68,7 +68,7 @@
       width: min(80vw, 350px);
       height: min(80vw, 350px);
       margin: 0.3rem auto 0.6rem;
-      touch-action: none;
+      /* no touch-action here, so browser pinch zoom still works */
     }
 
     .wheel {
@@ -88,7 +88,7 @@
       height: calc(100% - 4px);
       background-image: url("back.png");
       background-position-x: calc(50% + 3px);
-      background-position-y: calc(50% + 27px); /* desktop (perfect) */
+      background-position-y: calc(50% + 27px); /* desktop alignment */
       z-index: 0;
       box-shadow: 0 0 0 10px #020617 inset;
     }
@@ -242,10 +242,10 @@
       .title {
         font-size: 1.1rem;
       }
-      /* MOBILE: back.png 1 pixel larger in width & height (only in mobile) */
+      /* MOBILE: back.png only – 1px larger width/height, mobile position */
       .wheel.back {
-        background-position-x: calc(50% + 2px); /* left 1px from desktop */
-        background-position-y: calc(50% + 15px); /* mobile vertical offset */
+        background-position-x: calc(50% + 2px); /* 1px left from desktop */
+        background-position-y: calc(50% + 15px); /* tuned mobile offset */
         width: calc(100% + 2px);
         height: calc(100% + 2px);
       }
@@ -271,7 +271,10 @@
           <div class="wheel back"></div>
           <div class="wheel front" id="frontWheel"></div>
         </div>
-        <div class="hint">Drag (mouse or finger) to spin the front wheel. Pinch with two fingers to zoom.</div>
+        <div class="hint">
+          Drag (mouse or finger) to spin the front wheel.  
+          Use your browser pinch gesture to zoom the page.
+        </div>
         <div class="angle-readout" id="angleReadout">Angle: 0°</div>
       </div>
 
@@ -480,19 +483,11 @@
     let startAngle = 0;
     let currentRotation = 0;
 
-    // pinch zoom
-    let isPinching = false;
-    let initialPinchDistance = 0;
-    let initialScale = 1;
-    let currentScale = 1;
-    const MIN_SCALE = 0.6;
-    const MAX_SCALE = 1.6;
-
-    function applyWheelTransforms() {
+    function applyRotation() {
       frontWheel.style.transform =
-        `translate(-50%, -50%) rotate(${currentRotation}deg) scale(${currentScale})`;
-      backWheel.style.transform =
-        `translate(-50%, -50%) scale(${currentScale})`;
+        `translate(-50%, -50%) rotate(${currentRotation}deg)`;
+      backWheel.style.transform = `translate(-50%, -50%)`;
+      angleReadout.textContent = `Angle: ${currentRotation.toFixed(1)}°`;
     }
 
     function getEventPoint(e) {
@@ -514,95 +509,59 @@
       return angle;
     }
 
-    function setRotation(angle) {
-      currentRotation = angle;
-      applyWheelTransforms();
-      angleReadout.textContent = `Angle: ${currentRotation.toFixed(1)}°`;
-    }
-
-    function handleStart(e) {
-      // don't start drag if pinch
-      if (e.touches && e.touches.length > 1) return;
+    // mouse
+    function handleMouseDown(e) {
       e.preventDefault();
       isDragging = true;
       const angle = getAngleFromCenterWheel(e);
       startAngle = angle - currentRotation;
     }
 
-    function handleMove(e) {
+    function handleMouseMove(e) {
       if (!isDragging) return;
-      // ignore drag if currently pinching
-      if (isPinching) return;
       e.preventDefault();
       const angle = getAngleFromCenterWheel(e);
-      const newRotation = angle - startAngle;
-      setRotation(newRotation);
+      currentRotation = angle - startAngle;
+      applyRotation();
     }
 
-    function handleEnd() {
+    function handleMouseUp() {
       isDragging = false;
     }
 
-    // pinch helpers
-    function getPinchDistance(touches) {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
+    container.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
+    // touch – do NOT block 2-finger → browser handles pinch zoom
     function handleTouchStart(e) {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        isPinching = true;
-        isDragging = false;
-        initialPinchDistance = getPinchDistance(e.touches);
-        initialScale = currentScale;
-      }
+      if (e.touches.length !== 1) return; // let browser handle multi-touch
+      e.preventDefault();
+      isDragging = true;
+      const angle = getAngleFromCenterWheel(e);
+      startAngle = angle - currentRotation;
     }
 
     function handleTouchMove(e) {
-      if (isPinching && e.touches.length === 2) {
-        e.preventDefault();
-        const dist = getPinchDistance(e.touches);
-        if (initialPinchDistance <= 0) return;
-        let factor = dist / initialPinchDistance;
-        let newScale = initialScale * factor;
-        if (newScale < MIN_SCALE) newScale = MIN_SCALE;
-        if (newScale > MAX_SCALE) newScale = MAX_SCALE;
-        currentScale = newScale;
-        applyWheelTransforms();
-      }
+      if (!isDragging) return;
+      if (e.touches.length !== 1) return; // if second finger comes in, ignore
+      e.preventDefault();
+      const angle = getAngleFromCenterWheel(e);
+      currentRotation = angle - startAngle;
+      applyRotation();
     }
 
     function handleTouchEnd(e) {
-      if (e.touches.length < 2) {
-        isPinching = false;
-      }
+      if (e.touches && e.touches.length > 0) return;
+      isDragging = false;
     }
 
-    if (window.PointerEvent) {
-      container.addEventListener("pointerdown", handleStart);
-      container.addEventListener("pointermove", handleMove);
-      container.addEventListener("pointerup", handleEnd);
-      container.addEventListener("pointerleave", handleEnd);
-    } else {
-      container.addEventListener("touchstart", handleStart, { passive: false });
-      container.addEventListener("touchmove", handleMove, { passive: false });
-      container.addEventListener("touchend", handleEnd, { passive: false });
-      container.addEventListener("mousedown", handleStart);
-      document.addEventListener("mousemove", handleMove);
-      document.addEventListener("mouseup", handleEnd);
-    }
-
-    // touch events for pinch zoom (always)
     container.addEventListener("touchstart", handleTouchStart, { passive: false });
     container.addEventListener("touchmove", handleTouchMove, { passive: false });
     container.addEventListener("touchend", handleTouchEnd, { passive: false });
     container.addEventListener("touchcancel", handleTouchEnd, { passive: false });
 
-    // init transforms
-    applyWheelTransforms();
-    angleReadout.textContent = "Angle: 0°";
+    applyRotation();
 
     /*************************
      * CALCULATOR 2: DIGITAL
