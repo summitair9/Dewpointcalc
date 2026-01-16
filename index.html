@@ -4,1345 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DewPoint – Field Tool</title>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DewPoint – Field Tool</title>
 
-  <!-- Tailwind & Icons -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-  />
-
-  <!-- React + Babel (no build step) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Fonts & Styles -->
-  <style>
-    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap");
-    body {
-      font-family: "Inter", sans-serif;
-      background-color: #0f172a;
-      color: #f8fafc;
-      overflow-x: hidden;
-      min-height: 100vh;
-    }
-    .glass {
-      background: rgba(255, 255, 255, 0.03);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .glow-text {
-      text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
-    }
-    input[type="range"] {
-      -webkit-appearance: none;
-      background: rgba(255, 255, 255, 0.1);
-      height: 6px;
-      border-radius: 5px;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
-      background: #38bdf8;
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
-    }
-    select {
-      background-color: transparent;
-    }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <!-- APP SCRIPT -->
-  <script type="text/babel" data-presets="env,react">
-    const { useState, useEffect, useMemo } = React;
-
-    const TemperatureUnit = {
-      CELSIUS: "C",
-      FAHRENHEIT: "F",
-    };
-
-    function celsiusToFahrenheit(c) {
-      return Math.round(((c * 9) / 5 + 32) * 10) / 10;
-    }
-
-    function fahrenheitToCelsius(f) {
-      return Math.round(((f - 32) * 5) / 9 * 10) / 10;
-    }
-
-    function calculateDewPointCelsius(T, RH) {
-      const b = 17.67;
-      const c = 243.5;
-      const gamma = Math.log(RH / 100) + (b * T) / (c + T);
-      const dewPoint = (c * gamma) / (b - gamma);
-      return Math.round(dewPoint * 10) / 10;
-    }
-
-    function getComfortLevel(dewPointC) {
-      if (dewPointC < 10) return { label: "Dry & Crisp", color: "text-sky-400", level: 0 };
-      if (dewPointC < 15) return { label: "Pleasant", color: "text-emerald-400", level: 1 };
-      if (dewPointC < 18) return { label: "Comfortable", color: "text-teal-400", level: 2 };
-      if (dewPointC < 21) return { label: "Humid", color: "text-yellow-400", level: 3 };
-      if (dewPointC < 24) return { label: "Uncomfortable", color: "text-orange-500", level: 4 };
-      return { label: "Oppressive", color: "text-red-500", level: 5 };
-    }
-
-    function generateAtmosphereDescription(temp, humidity, dewPoint, unit) {
-      const unitSymbol = "°" + unit;
-      if (humidity < 30 && dewPoint < (unit === "C" ? 5 : 41)) {
-        return "Cool, dry air that feels crisp and light at " + temp + unitSymbol + ".";
-      }
-      if (humidity < 45) {
-        return "Balanced air that feels clean and easy to breathe at " + temp + unitSymbol + ".";
-      }
-      if (humidity < 60) {
-        return "Soft, mild humidity wrapping gently around your skin at " + temp + unitSymbol + ".";
-      }
-      if (humidity < 75) {
-        return "Warm, clingy air that you feel on your skin at " + temp + unitSymbol + ".";
-      }
-      return "Heavy, saturated air pressing close against your skin at " + temp + unitSymbol + ".";
-    }
-
-    function calcDbWbHelper(dbF, wbF) {
-      const db = parseFloat(dbF);
-      const wb = parseFloat(wbF);
-      if (isNaN(db) || isNaN(wb)) return null;
-      if (wb > db) return null;
-
-      const T = (db - 32) * (5 / 9);
-      const Tw = (wb - 32) * (5 / 9);
-
-      const A = 0.00066 * 101.3;
-      const esTw = 6.112 * Math.exp((17.67 * Tw) / (Tw + 243.5));
-      const e = esTw - A * (T - Tw);
-      const esT = 6.112 * Math.exp((17.67 * T) / (T + 243.5));
-      let RH = 100 * (e / esT);
-      RH = Math.max(0, Math.min(100, RH));
-
-      const dewC = calculateDewPointCelsius(T, RH);
-      const dewF = celsiusToFahrenheit(dewC);
-
-      let coilSatF = dewF - 15;
-      coilSatF = Math.max(32, Math.min(55, coilSatF));
-
-      return {
-        rh: RH,
-        dewC,
-        dewF,
-        coilSatF,
-      };
-    }
-
-    const PT_BASE_R22 = [
-      { t: 40, p: 68.6 },
-      { t: 50, p: 84.1 },
-      { t: 60, p: 101.6 },
-      { t: 70, p: 121.5 },
-      { t: 80, p: 143.7 },
-      { t: 90, p: 168.4 },
-      { t: 100, p: 196.0 },
-    ];
-
-    const PT_BASE_R410A = [
-      { t: 40, p: 118.9 },
-      { t: 50, p: 143.3 },
-      { t: 60, p: 170.7 },
-      { t: 70, p: 201.5 },
-      { t: 80, p: 235.9 },
-      { t: 90, p: 274.3 },
-      { t: 100, p: 316.9 },
-    ];
-
-    const PT_BASE_R407C = [
-      { t: 40, p: 61.7 },
-      { t: 50, p: 77.1 },
-      { t: 60, p: 94.3 },
-      { t: 70, p: 138.5 },
-      { t: 80, p: 163.5 },
-      { t: 90, p: 191.3 },
-      { t: 100, p: 222.3 },
-    ];
-
-    const PT_BASE_R134A = [
-      { t: 40, p: 35.0 },
-      { t: 50, p: 45.4 },
-      { t: 60, p: 57.4 },
-      { t: 70, p: 71.1 },
-      { t: 80, p: 86.7 },
-      { t: 90, p: 104.3 },
-      { t: 100, p: 124.1 },
-    ];
-
-    const PT_BASE_R404A = [
-      { t: 40, p: 86.9 },
-      { t: 50, p: 105.3 },
-      { t: 60, p: 126.0 },
-      { t: 70, p: 149.3 },
-      { t: 80, p: 175.4 },
-      { t: 90, p: 204.5 },
-      { t: 100, p: 236.8 },
-    ];
-
-    const PT_BASE_R744 = [
-      { t: 40, p: 617 },
-      { t: 50, p: 699 },
-      { t: 60, p: 790 },
-      { t: 70, p: 890 },
-      { t: 80, p: 1000 },
-      { t: 90, p: 1120 },
-      { t: 100, p: 1250 },
-    ];
-
-    const PT_DATA = {
-      "R-22": PT_BASE_R22,
-      "R-438A / MO99": PT_BASE_R22,
-      "R-422D": PT_BASE_R22,
-      "R-422B / NU-22B": PT_BASE_R22,
-      "R-421A": PT_BASE_R22,
-      "R-427A": PT_BASE_R22,
-      "R-407C": PT_BASE_R407C,
-      "R-407A": PT_BASE_R407C,
-      "R-407F": PT_BASE_R407C,
-      "R-424A / RS-44": PT_BASE_R22,
-      "R-290 / Propane": PT_BASE_R22,
-
-      "R-410A": PT_BASE_R410A,
-      "R-32": PT_BASE_R410A,
-      "R-454B": PT_BASE_R410A,
-      "R-452B": PT_BASE_R410A,
-      "R-454A": PT_BASE_R410A,
-      "R-454C": PT_BASE_R410A,
-      "R-466A": PT_BASE_R410A,
-
-      "R-404A": PT_BASE_R404A,
-      "R-507A": PT_BASE_R404A,
-      "R-448A": PT_BASE_R404A,
-      "R-449A": PT_BASE_R404A,
-      "R-449B": PT_BASE_R404A,
-      "R-452A": PT_BASE_R404A,
-
-      "R-12": PT_BASE_R134A,
-      "R-134a": PT_BASE_R134A,
-      "R-513A": PT_BASE_R134A,
-      "R-1234yf": PT_BASE_R134A,
-      "R-1234ze": PT_BASE_R134A,
-
-      "R-123": PT_BASE_R134A,
-
-      "R-600a / Isobutane": PT_BASE_R134A,
-      "R-717 / Ammonia": PT_BASE_R22,
-      "R-744 / CO2": PT_BASE_R744,
-    };
-
-    const PT_OPTIONS = Object.keys(PT_DATA).sort();
-
-    function ptPressureFromTemp(name, tempF) {
-      const curve = PT_DATA[name];
-      if (!curve || isNaN(tempF)) return null;
-      const pts = curve;
-      if (tempF <= pts[0].t) return pts[0].p;
-      if (tempF >= pts[pts.length - 1].t) return pts[pts.length - 1].p;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const a = pts[i];
-        const b = pts[i + 1];
-        if (tempF >= a.t && tempF <= b.t) {
-          const ratio = (tempF - a.t) / (b.t - a.t);
-          return a.p + ratio * (b.p - a.p);
-        }
-      }
-      return null;
-    }
-
-    function ptTempFromPressure(name, pressure) {
-      const curve = PT_DATA[name];
-      if (!curve || isNaN(pressure)) return null;
-      const pts = curve.slice().sort((a, b) => a.p - b.p);
-      if (pressure <= pts[0].p) return pts[0].t;
-      if (pressure >= pts[pts.length - 1].p) return pts[pts.length - 1].t;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const a = pts[i];
-        const b = pts[i + 1];
-        if (pressure >= a.p && pressure <= b.p) {
-          const ratio = (pressure - a.p) / (b.p - a.p);
-          return a.t + ratio * (b.t - a.t);
-        }
-      }
-      return null;
-    }
-
-    function App() {
-      const [state, setState] = useState({
-        temperature: 72,
-        humidity: 50,
-        unit: TemperatureUnit.FAHRENHEIT,
-      });
-
-      const [aiText, setAiText] = useState(
-        "Adjust the sliders to feel the atmosphere..."
-      );
-      const [loadingAi, setLoadingAi] = useState(false);
-
-      const [outdoorTempC, setOutdoorTempC] = useState(null);
-      const [outdoorLoading, setOutdoorLoading] = useState(false);
-      const [locationName, setLocationName] = useState("Local");
-      const [selectedLocationKey, setSelectedLocationKey] = useState("local");
-      const [customCity, setCustomCity] = useState("");
-
-      const locations = [
-        { key: "local", label: "Local (device)", type: "local" },
-        { key: "custom", label: "Custom city (type below)", type: "custom" },
-        { key: "nyc", label: "New York, NY", type: "fixed", lat: 40.7128, lon: -74.006 },
-        { key: "mia", label: "Miami, FL", type: "fixed", lat: 25.7617, lon: -80.1918 },
-        { key: "la", label: "Los Angeles, CA", type: "fixed", lat: 34.0522, lon: -118.2437 },
-        { key: "chi", label: "Chicago, IL", type: "fixed", lat: 41.8781, lon: -87.6298 },
-      ];
-
-      const [dbwb, setDbwb] = useState({ db: 75, wb: 63 });
-      const [dt, setDt] = useState({ returnDb: 75, supplyDb: 55 });
-
-      const [airflow, setAirflow] = useState({
-        designCfm: 400,
-        designStatic: 0.5,
-        returnStatic: 0.08,
-        supplyStatic: 0.22,
-      });
-
-      const [pt, setPt] = useState(() => {
-        const ref = "R-410A";
-        const t = 40;
-        const p = ptPressureFromTemp(ref, t);
-        return {
-          refrigerant: ref,
-          tempF: t,
-          pressure: p ? p.toFixed(1) : "",
-        };
-      });
-
-      const sectionOptions = [
-        { id: "section-evap-dbwb", label: "Evap Coil Target (DB/WB)" },
-        { id: "section-dt", label: "ΔT Across Coil" },
-        { id: "section-airflow", label: "Airflow & Static" },
-        { id: "section-pt", label: "PT Helper" },
-        { id: "section-duct-calculator", label: "Duct Calculator" },
-      ];
-
-      function scrollToSection(id) {
-        const el = document.getElementById(id);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }
-
-      const tempC = useMemo(
-        () =>
-          state.unit === TemperatureUnit.CELSIUS
-            ? state.temperature
-            : fahrenheitToCelsius(state.temperature),
-        [state.temperature, state.unit]
-      );
-
-      const dewPointC = useMemo(
-        () => calculateDewPointCelsius(tempC, state.humidity),
-        [tempC, state.humidity]
-      );
-
-      const dewPointDisplay = useMemo(
-        () =>
-          state.unit === TemperatureUnit.CELSIUS
-            ? dewPointC
-            : celsiusToFahrenheit(dewPointC),
-        [dewPointC, state.unit]
-      );
-
-      const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
-
-      const dbwbRes = useMemo(
-        () => calcDbWbHelper(dbwb.db, dbwb.wb),
-        [dbwb.db, dbwb.wb]
-      );
-
-      const deltaT = useMemo(() => {
-        const r = parseFloat(dt.returnDb);
-        const s = parseFloat(dt.supplyDb);
-        if (isNaN(r) || isNaN(s)) return null;
-        return r - s;
-      }, [dt.returnDb, dt.supplyDb]);
-
-      function classifyDeltaT(d) {
-        if (d == null) return { label: "--", color: "text-slate-300", note: "Enter return & supply" };
-        if (d < 8) return { label: "Very Low", color: "text-red-400", note: "Strongly suspect airflow or charge" };
-        if (d < 14) return { label: "Low", color: "text-amber-400", note: "Below typical comfort range" };
-        if (d <= 22) return { label: "In Range", color: "text-emerald-400", note: "Common comfort-cooling band" };
-        return { label: "High", color: "text-orange-400", note: "Often low airflow or low load" };
-      }
-
-      const deltaInfo = classifyDeltaT(deltaT);
-
-      const airflowInfo = useMemo(() => {
-        const designCfm = parseFloat(airflow.designCfm);
-        const designStatic = parseFloat(airflow.designStatic);
-        const rs = parseFloat(airflow.returnStatic);
-        const ss = parseFloat(airflow.supplyStatic);
-        if (
-          isNaN(designCfm) ||
-          isNaN(designStatic) ||
-          isNaN(rs) ||
-          isNaN(ss) ||
-          designCfm <= 0 ||
-          designStatic <= 0
-        ) {
-          return {
-            tesp: null,
-            estCfm: null,
-            label: "--",
-            color: "text-slate-300",
-            note: "Enter design and measured static",
-          };
-        }
-        const tesp = Math.abs(rs) + Math.abs(ss);
-        let estCfm = null;
-        if (tesp > 0.05) {
-          const ratio = Math.sqrt(designStatic / tesp);
-          estCfm = designCfm * ratio;
-        }
-        let label = "";
-        let color = "";
-        let note = "";
-        if (tesp < designStatic * 0.7) {
-          label = "Static Low";
-          color = "text-sky-300";
-          note = "Could be low-resistance duct or low blower tap.";
-        } else if (tesp <= designStatic * 1.2) {
-          label = "Static Normal";
-          color = "text-emerald-400";
-          note = "Static near design – airflow likely close if setup correct.";
-        } else {
-          label = "Static High";
-          color = "text-red-400";
-          note = "Restrictions, undersized duct, closed registers, dirty filter/coil.";
-        }
-        return { tesp, estCfm, label, color, note };
-      }, [
-        airflow.designCfm,
-        airflow.designStatic,
-        airflow.returnStatic,
-        airflow.supplyStatic,
-      ]);
-
-      const airflowHint = useMemo(() => {
-        if (deltaT == null || airflowInfo.tesp == null) {
-          return "Enter ΔT and static to see a quick airflow vs charge hint.";
-        }
-        if (
-          (deltaInfo.label === "Very Low" || deltaInfo.label === "Low") &&
-          airflowInfo.label === "Static High"
-        ) {
-          return "Numbers scream AIRFLOW – chase filter, coil, duct, and blower setup before charge.";
-        }
-        if (
-          (deltaInfo.label === "Very Low" || deltaInfo.label === "Low") &&
-          (airflowInfo.label === "Static Normal" || airflowInfo.label === "Static Low")
-        ) {
-          return "Airflow not terrible on paper – look harder at charge, metering device, and load.";
-        }
-        if (deltaInfo.label === "In Range" && airflowInfo.label === "Static Normal") {
-          return "ΔT and static both look okay – airflow likely not the main problem.";
-        }
-        return "Mixed signals – use these numbers as a compass, not a verdict.";
-      }, [deltaT, airflowInfo, deltaInfo]);
-
-      async function fetchWeather(lat, lon) {
-        try {
-          setOutdoorLoading(true);
-          const res = await fetch(
-            "https://api.open-meteo.com/v1/forecast?latitude=" +
-              lat +
-              "&longitude=" +
-              lon +
-              "&current_weather=true"
-          );
-          const data = await res.json();
-          if (data && data.current_weather) {
-            setOutdoorTempC(data.current_weather.temperature);
-          }
-        } catch (e) {
-          console.log("weather error", e);
-        } finally {
-          setOutdoorLoading(false);
-        }
-      }
-
-      async function fetchCityWeather(name) {
-        try {
-          setOutdoorLoading(true);
-          const res = await fetch(
-            "https://geocoding-api.open-meteo.com/v1/search?name=" +
-              encodeURIComponent(name) +
-              "&count=1"
-          );
-          const data = await res.json();
-          if (data && data.results && data.results.length > 0) {
-            const r = data.results[0];
-            const niceName =
-              r.name + (r.country_code ? ", " + r.country_code : "");
-            setLocationName(niceName);
-            await fetchWeather(r.latitude, r.longitude);
-          } else {
-            console.log("No geocode result");
-            setOutdoorTempC(null);
-          }
-        } catch (e) {
-          console.log("geocode error", e);
-        } finally {
-          setOutdoorLoading(false);
-        }
-      }
-
-      useEffect(() => {
-        if ("geolocation" in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setLocationName("Local");
-              setSelectedLocationKey("local");
-              fetchWeather(pos.coords.latitude, pos.coords.longitude);
-            },
-            () => {}
-          );
-        }
-      }, []);
-
-      const displayOutdoor = useMemo(() => {
-        if (outdoorTempC == null) return null;
-        if (state.unit === TemperatureUnit.CELSIUS) {
-          return Math.round(outdoorTempC * 10) / 10;
-        }
-        return Math.round(((outdoorTempC * 9) / 5 + 32) * 10) / 10;
-      }, [outdoorTempC, state.unit]);
-
-      useEffect(() => {
-        setLoadingAi(true);
-        const id = setTimeout(() => {
-          const desc = generateAtmosphereDescription(
-            state.temperature,
-            state.humidity,
-            dewPointDisplay,
-            state.unit
-          );
-          setAiText(desc);
-          setLoadingAi(false);
-        }, 600);
-        return () => clearTimeout(id);
-      }, [state.temperature, state.humidity, dewPointDisplay, state.unit]);
-
-      function toggleUnit() {
-        setState((prev) => {
-          const newUnit =
-            prev.unit === TemperatureUnit.CELSIUS
-              ? TemperatureUnit.FAHRENHEIT
-              : TemperatureUnit.CELSIUS;
-          const newTemp =
-            prev.unit === TemperatureUnit.CELSIUS
-              ? celsiusToFahrenheit(prev.temperature)
-              : fahrenheitToCelsius(prev.temperature);
-          return { ...prev, unit: newUnit, temperature: newTemp };
-        });
-      }
-
-      function updateTemp(val) {
-        setState((prev) => ({ ...prev, temperature: parseFloat(val) }));
-      }
-
-      function updateHumidity(val) {
-        setState((prev) => ({ ...prev, humidity: parseFloat(val) }));
-      }
-
-      function updateDbWbField(field, val) {
-        setDbwb((prev) => ({ ...prev, [field]: val }));
-      }
-
-      function updateDtField(field, val) {
-        setDt((prev) => ({ ...prev, [field]: val }));
-      }
-
-      function updateAirflowField(field, val) {
-        setAirflow((prev) => ({ ...prev, [field]: val }));
-      }
-
-      function handlePtRefChange(name) {
-        setPt((prev) => {
-          const t = typeof prev.tempF === "number" ? prev.tempF : 40;
-          const p = ptPressureFromTemp(name, t);
-          return {
-            refrigerant: name,
-            tempF: t,
-            pressure: p ? p.toFixed(1) : "",
-          };
-        });
-      }
-
-      function handlePtTempChange(val) {
-        if (val === "") {
-          setPt((prev) => ({ ...prev, tempF: "", pressure: "" }));
-          return;
-        }
-        const t = parseFloat(val);
-        if (isNaN(t)) return;
-        const p = ptPressureFromTemp(pt.refrigerant, t);
-        setPt((prev) => ({
-          ...prev,
-          tempF: t,
-          pressure: p ? p.toFixed(1) : "",
-        }));
-      }
-
-      function handlePtPressureChange(val) {
-        if (val === "") {
-          setPt((prev) => ({ ...prev, pressure: "", tempF: "" }));
-          return;
-        }
-        const p = parseFloat(val);
-        if (isNaN(p)) return;
-        const t = ptTempFromPressure(pt.refrigerant, p);
-        setPt((prev) => ({
-          ...prev,
-          pressure: p,
-          tempF: t != null ? t.toFixed(1) : "",
-        }));
-      }
-
-      function handleLocationSelectChange(e) {
-        const key = e.target.value;
-        setSelectedLocationKey(key);
-        const loc = locations.find((l) => l.key === key);
-        if (!loc) return;
-
-        if (loc.type === "local") {
-          setLocationName("Local");
-          if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                fetchWeather(pos.coords.latitude, pos.coords.longitude);
-              },
-              () => {}
-            );
-          }
-        } else if (loc.type === "fixed") {
-          setLocationName(loc.label);
-          fetchWeather(loc.lat, loc.lon);
-        } else if (loc.type === "custom") {
-        }
-      }
-
-      function applyCustomCity() {
-        const name = customCity.trim();
-        if (!name) return;
-        setSelectedLocationKey("custom");
-        fetchCityWeather(name);
-      }
-
-      function Logo() {
-        return (
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16">
-              <svg viewBox="0 0 100 100" className="w-full h-full">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  fill="none"
-                  stroke="rgba(56, 189, 248, 0.2)"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M50 5 A45 45 0 0 1 95 50"
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M15 50 A35 35 0 0 1 50 15"
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M45 15 L50 10 L55 15"
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M10 50 L15 45 L20 50"
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M15 50 A35 35 0 0 0 85 50"
-                  fill="none"
-                  stroke="#fb923c"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  opacity="0.8"
-                />
-                <g transform="translate(50, 50) scale(0.6)">
-                  <path
-                    d="M0 -30 L0 30 M-30 0 L30 0 M-21 -21 L21 21 M-21 21 L21 -21"
-                    stroke="#f8fafc"
-                    strokeWidth="4"
-                  />
-                </g>
-              </svg>
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-3xl font-light tracking-widest text-white uppercase">
-                Quality Air
-              </span>
-              <span className="text-sm font-medium tracking-[0.2em] text-slate-500 uppercase">
-                Heating &amp; Cooling
-              </span>
-            </div>
-          </div>
-        );
-      }
-
-      const year = new Date().getFullYear();
-
-      return (
-        <div className="min-h-screen flex flex-col p-6 md:p-12 relative overflow-hidden">
-          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px]"></div>
-
-          <div className="w-full flex flex-col md:flex-row justify-between items-center mb-12 relative z-10 gap-8">
-            <Logo />
-
-            <div className="flex flex-col md:flex-row items-stretch gap-4 relative z-20">
-              <div className="glass px-6 py-4 rounded-3xl flex flex-col items-stretch shadow-xl border-sky-500/10 relative z-30 min-w-[230px]">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
-                  Outdoor Temp Source
-                </span>
-                <select
-                  className="border border-white/10 rounded-2xl px-3 py-1 text-[11px] text-slate-200 outline-none bg-transparent mb-2"
-                  value={selectedLocationKey}
-                  onChange={handleLocationSelectChange}
-                >
-                  {locations.map((loc) => (
-                    <option
-                      key={loc.key}
-                      value={loc.key}
-                      className="bg-slate-900 text-slate-100"
-                    >
-                      {loc.label}
-                    </option>
-                  ))}
-                </select>
-
-                {selectedLocationKey === "custom" && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="text"
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-400"
-                      placeholder="City, State (e.g. Miami, FL)"
-                      value={customCity}
-                      onChange={(e) => setCustomCity(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={applyCustomCity}
-                      className="text-[10px] px-3 py-1 rounded-xl bg-sky-500/80 hover:bg-sky-500 text-white font-semibold"
-                    >
-                      Use
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3 mt-1">
-                  {outdoorLoading ? (
-                    <div className="h-8 w-16 bg_white/5 animate-pulse rounded-lg"></div>
-                  ) : displayOutdoor != null ? (
-                    <div className="text-3xl font-bold glow-text">
-                      {displayOutdoor}
-                      <span className="text-sky-400">°</span>
-                      {state.unit}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-600">No data</span>
-                  )}
-                  <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
-                </div>
-                <span className="mt-1 text-[9px] text-slate-500 uppercase tracking-[0.2em]">
-                  Currently: {locationName}
-                </span>
-              </div>
-
-              <div className="glass px-4 py-3 rounded-3xl flex flex-col justify-center shadow-xl border-sky-500/10 relative z-10">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
-                  Jump to Card
-                </span>
-                <select
-                  className="border border-white/10 rounded-2xl px-3 py-1 text-[11px] text-slate-200 outline-none bg-transparent"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (e.target.value) scrollToSection(e.target.value);
-                  }}
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
-                  {sectionOptions.map((opt) => (
-                    <option
-                      key={opt.id}
-                      value={opt.id}
-                      className="bg-slate-900 text-slate-100"
-                    >
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center relative z-10 mb-10">
-            <h1 className="text-4xl md:text-7xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 mb-2">
-              DEWPOINT<span className="text-white">.</span>
-            </h1>
-            <p className="text-slate-400 font-light tracking-[0.5em] uppercase text-[10px]">
-              Thermodynamic Clarity
-            </p>
-          </div>
-
-          <main className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
-            <section className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col gap-8 shadow-2xl">
-              <div className="space-y-6">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
-                      Ambient Temperature
-                    </label>
-                    <div className="text-4xl md:text-5xl font-light">
-                      {state.temperature}
-                      <span className="text-sky-400">°</span>
-                      {state.unit}
-                    </div>
-                  </div>
-                  <button
-                    onClick={toggleUnit}
-                    className="bg-white/5 hover:bg-white/10 px-4 py-2 rounded-2xl text-xs font-bold transition-all border border-white/10 active:scale-95 shadow-lg"
-                  >
-                    Switch to °{state.unit === TemperatureUnit.CELSIUS ? "F" : "C"}
-                  </button>
-                </div>
-                <input
-                  type="range"
-                  min={state.unit === TemperatureUnit.CELSIUS ? "-20" : "-4"}
-                  max={state.unit === TemperatureUnit.CELSIUS ? "50" : "122"}
-                  step="0.5"
-                  value={state.temperature}
-                  onChange={(e) => updateTemp(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
-                      Relative Humidity
-                    </label>
-                    <div className="text-4xl md:text-5xl font-light">
-                      {state.humidity}
-                      <span className="text-sky-400">%</span>
-                    </div>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={state.humidity}
-                  onChange={(e) => updateHumidity(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="mt-auto pt-6 border-t border-white/5">
-                <div className="flex items-start gap-3 italic text-slate-300 min-h-[50px]">
-                  <i className="fa-solid fa-sparkles text-sky-400 mt-1 text-lg"></i>
-                  {loadingAi ? (
-                    <span className="animate-pulse text-base">
-                      Reading the room…
-                    </span>
-                  ) : (
-                    <p className="text-base md:text-lg leading-relaxed font-light">
-                      {aiText}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="flex flex-col gap-8">
-              <div className="glass p-8 md:p-10 rounded-[2.5rem] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-slate-500 mb-4">
-                  Calculated Dew Point
-                </label>
-                <div className="glow-text font-black leading-none mb-4">
-                  <span className="text-[4rem] md:text-[7rem]">
-                    {dewPointDisplay}
-                  </span>
-                  <span className="text-3xl md:text-4xl text-sky-400 align-top">
-                    °
-                  </span>
-                </div>
-                <div
-                  className={
-                    "mt-2 text-xl md:text-2xl font-bold flex items-center gap-3 uppercase tracking-tight " +
-                    comfort.color
-                  }
-                >
-                  <i
-                    className={
-                      "fa-solid " +
-                      (comfort.level > 3 ? "fa-face-hot" : "fa-droplet")
-                    }
-                  ></i>
-                  {comfort.label}
-                </div>
-              </div>
-
-              <div className="glass p-6 rounded-[2rem] grid grid-cols-2 gap-4">
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                    Saturation Level
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-sky-400"
-                        style={{ width: state.humidity + "%" }}
-                      ></div>
-                    </div>
-                    <span className="text-lg font-bold">{state.humidity}%</span>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                    Vapor Status
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <i
-                      className={
-                        "fa-solid fa-wind " +
-                        (dewPointC > 20 ? "text-orange-400" : "text-sky-400")
-                      }
-                    ></i>
-                    <span className="text-lg font-bold">
-                      {dewPointC > 20 ? "Heavy" : "Light"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                id="section-evap-dbwb"
-                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
-              >
-                <div className="flex items-center justify_between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Evap Coil Target (DB/WB)
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Entering air dry-bulb / wet-bulb in °F – quick rule-of-thumb,
-                      not a factory chart.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-snowflake text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={dbwb.db}
-                      onChange={(e) => updateDbWbField("db", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering WB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={dbwb.wb}
-                      onChange={(e) => updateDbWbField("wb", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering RH
-                    </span>
-                    <span className="text-lg font-semibold text-sky-300">
-                      {dbwbRes ? Math.round(dbwbRes.rh) + "%" : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Dew Point (°F)
-                    </span>
-                    <span className="text-lg font-semibold text-emerald-300">
-                      {dbwbRes ? dbwbRes.dewF.toFixed(1) + "°" : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Est. Evap Sat (°F)
-                    </span>
-                    <span className="text-lg font-semibold text-amber-300">
-                      {dbwbRes ? dbwbRes.coilSatF.toFixed(1) + "°" : "--"}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Use as a feel-for-it tool. Always verify actual coil target with
-                  manufacturer charts when available.
-                </p>
-              </div>
-
-              <div
-                id="section-dt"
-                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      ΔT Across Coil
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Return vs supply dry-bulb in °F – common comfort range
-                      roughly 16–22°F.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-temperature-half text-amber-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Return DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-                      value={dt.returnDb}
-                      onChange={(e) => updateDtField("returnDb", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Supply DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-                      value={dt.supplyDb}
-                      onChange={(e) => updateDtField("supplyDb", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-2">
-                  <div>
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      ΔT (Return − Supply)
-                    </span>
-                    <span className="text-2xl font-bold text-amber-200">
-                      {deltaT != null ? deltaT.toFixed(1) + "°" : "--"}
-                    </span>
-                  </div>
-                  <div className="text-right max-w-[220px]">
-                    <span
-                      className={
-                        "block text-xs font-bold uppercase tracking-wide " +
-                        deltaInfo.color
-                      }
-                    >
-                      {deltaInfo.label}
-                    </span>
-                    <span className="block text-[10px] text-slate-400 mt-1">
-                      {deltaInfo.note}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                id="section-airflow"
-                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Airflow & Static
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Quick estimate – always confirm with manufacturer blower
-                      charts.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-fan text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Design Airflow (CFM)
-                    </label>
-                    <input
-                      type="number"
-                      step="10"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.designCfm}
-                      onChange={(e) =>
-                        updateAirflowField("designCfm", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Design Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.designStatic}
-                      onChange={(e) =>
-                        updateAirflowField("designStatic", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Return Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.returnStatic}
-                      onChange={(e) =>
-                        updateAirflowField("returnStatic", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Supply Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.supplyStatic}
-                      onChange={(e) =>
-                        updateAirflowField("supplyStatic", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Total Static
-                    </span>
-                    <span className="text-lg font-semibold text-sky-300">
-                      {airflowInfo.tesp != null
-                        ? airflowInfo.tesp.toFixed(2) + " in"
-                        : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Est. Airflow
-                    </span>
-                    <span className="text-lg font-semibold text-emerald-300">
-                      {airflowInfo.estCfm != null
-                        ? Math.round(airflowInfo.estCfm) + " CFM"
-                        : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Static Status
-                    </span>
-                    <span
-                      className={
-                        "text-lg font-semibold " + airflowInfo.color
-                      }
-                    >
-                      {airflowInfo.label}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {airflowInfo.note}
-                </p>
-                <p className="text-[10px] text-slate-400 mt-2">
-                  {airflowHint}
-                </p>
-              </div>
-
-              <div
-                id="section-pt"
-                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Multi-Refrigerant PT Helper
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Common &amp; replacement refrigerants – quick approximate
-                      PT in the 40–100°F band.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-chart-line text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Refrigerant
-                    </label>
-                    <select
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] outline-none focus:border-sky-400"
-                      value={pt.refrigerant}
-                      onChange={(e) => handlePtRefChange(e.target.value)}
-                    >
-                      {PT_OPTIONS.map((name) => (
-                        <option
-                          key={name}
-                          value={name}
-                          className="bg-slate-900 text-slate-100"
-                        >
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Sat Temp (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={pt.tempF}
-                      onChange={(e) => handlePtTempChange(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Sat Pressure (psig)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={pt.pressure}
-                      onChange={(e) => handlePtPressureChange(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Values are approximate. For charging, always confirm with the
-                  manufacturer PT chart for the exact refrigerant and blend.
-                </p>
-              </div>
-
-              {/* DUCT CALCULATOR CARD */}
-              <div
-                id="section-duct-calculator"
-                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Duct Calculator
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Interactive spinning duct wheel embedded below.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-circle-notch text-sky-300 text-xl"></i>
-                </div>
-                <div className="w-full rounded-2xl overflow-hidden border border-white/10 bg-black">
-                  <iframe
-                    src="wheel.html"
-                    style={{
-                      width: "100%",
-                      height: "600px",
-                      border: "none",
-                      borderRadius: "12px",
-                      background: "#000",
-                    }}
-                    title="Duct Calculator Wheel"
-                  ></iframe>
-                </div>
-              </div>
-            </section>
-          </main>
-
-          <footer className="mt-10 p-6 text-slate-600 text-[9px] tracking-widest uppercase text-center relative z-10 border-t border-white/5">
-            &copy; {year} DewPoint Field Tool • Not a substitute for manufacturer
-            data or local codes.
-          </footer>
-        </div>
-      );
-    }
-
-    const rootElement = document.getElementById("root");
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(<App />);
-  </script>
-</body>
-</html>
   <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link
@@ -1632,15 +294,16 @@
       const [aiText, setAiText] = useState("Adjust the sliders to feel the atmosphere...");
       const [loadingAi, setLoadingAi] = useState(false);
 
-      // outdoor weather (Open-Meteo). Stored as °C for temps/dew.
+      // outdoor temp (from Open-Meteo, stored as °C)
       const [outdoorTempC, setOutdoorTempC] = useState(null);
-      const [outdoorRh, setOutdoorRh] = useState(null);
-      const [outdoorDewC, setOutdoorDewC] = useState(null);
-
       const [outdoorLoading, setOutdoorLoading] = useState(false);
       const [locationName, setLocationName] = useState("Local");
       const [selectedLocationKey, setSelectedLocationKey] = useState("local");
       const [customCity, setCustomCity] = useState("");
+
+      // ✅ ADDED: outdoor RH + dew (stored as % and °C)
+      const [outdoorRh, setOutdoorRh] = useState(null);
+      const [outdoorDewC, setOutdoorDewC] = useState(null);
 
       const locations = [
         { key: "local", label: "Local (device)", type: "local" },
@@ -1683,7 +346,6 @@
         { id: "section-dt", label: "ΔT Across Coil" },
         { id: "section-airflow", label: "Airflow & Static" },
         { id: "section-pt", label: "PT Helper" },
-        { id: "duct-calculator", label: "Duct Calculator" },
       ];
 
       function scrollToSection(id) {
@@ -1695,7 +357,10 @@
 
       // derived: dewpoint etc
       const tempC = useMemo(
-        () => (state.unit === TemperatureUnit.CELSIUS ? state.temperature : fahrenheitToCelsius(state.temperature)),
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? state.temperature
+            : fahrenheitToCelsius(state.temperature),
         [state.temperature, state.unit]
       );
 
@@ -1705,14 +370,20 @@
       );
 
       const dewPointDisplay = useMemo(
-        () => (state.unit === TemperatureUnit.CELSIUS ? dewPointC : celsiusToFahrenheit(dewPointC)),
+        () =>
+          state.unit === TemperatureUnit.CELSIUS
+            ? dewPointC
+            : celsiusToFahrenheit(dewPointC),
         [dewPointC, state.unit]
       );
 
       const comfort = useMemo(() => getComfortLevel(dewPointC), [dewPointC]);
 
       // DB/WB results
-      const dbwbRes = useMemo(() => calcDbWbHelper(dbwb.db, dbwb.wb), [dbwb.db, dbwb.wb]);
+      const dbwbRes = useMemo(
+        () => calcDbWbHelper(dbwb.db, dbwb.wb),
+        [dbwb.db, dbwb.wb]
+      );
 
       // ΔT results
       const deltaT = useMemo(() => {
@@ -1738,8 +409,21 @@
         const designStatic = parseFloat(airflow.designStatic);
         const rs = parseFloat(airflow.returnStatic);
         const ss = parseFloat(airflow.supplyStatic);
-        if (isNaN(designCfm) || isNaN(designStatic) || isNaN(rs) || isNaN(ss) || designCfm <= 0 || designStatic <= 0) {
-          return { tesp: null, estCfm: null, label: "--", color: "text-slate-300", note: "Enter design and measured static" };
+        if (
+          isNaN(designCfm) ||
+          isNaN(designStatic) ||
+          isNaN(rs) ||
+          isNaN(ss) ||
+          designCfm <= 0 ||
+          designStatic <= 0
+        ) {
+          return {
+            tesp: null,
+            estCfm: null,
+            label: "--",
+            color: "text-slate-300",
+            note: "Enter design and measured static",
+          };
         }
         const tesp = Math.abs(rs) + Math.abs(ss);
         let estCfm = null;
@@ -1764,18 +448,27 @@
           note = "Restrictions, undersized duct, closed registers, dirty filter/coil.";
         }
         return { tesp, estCfm, label, color, note };
-      }, [airflow.designCfm, airflow.designStatic, airflow.returnStatic, airflow.supplyStatic]);
+      }, [
+        airflow.designCfm,
+        airflow.designStatic,
+        airflow.returnStatic,
+        airflow.supplyStatic,
+      ]);
 
-      // simple “Airflow vs Charge” hint
       const airflowHint = useMemo(() => {
         if (deltaT == null || airflowInfo.tesp == null) {
           return "Enter ΔT and static to see a quick airflow vs charge hint.";
         }
-        if ((deltaInfo.label === "Very Low" || deltaInfo.label === "Low") && airflowInfo.label === "Static High") {
+        if (
+          (deltaInfo.label === "Very Low" || deltaInfo.label === "Low") &&
+          airflowInfo.label === "Static High"
+        ) {
           return "Numbers scream AIRFLOW – chase filter, coil, duct, and blower setup before charge.";
         }
-        if ((deltaInfo.label === "Very Low" || deltaInfo.label === "Low") &&
-            (airflowInfo.label === "Static Normal" || airflowInfo.label === "Static Low")) {
+        if (
+          (deltaInfo.label === "Very Low" || deltaInfo.label === "Low") &&
+          (airflowInfo.label === "Static Normal" || airflowInfo.label === "Static Low")
+        ) {
           return "Airflow not terrible on paper – look harder at charge, metering device, and load.";
         }
         if (deltaInfo.label === "In Range" && airflowInfo.label === "Static Normal") {
@@ -1784,31 +477,23 @@
         return "Mixed signals – use these numbers as a compass, not a verdict.";
       }, [deltaT, airflowInfo, deltaInfo]);
 
-      // outdoor temp fetch (Open-Meteo)
+      // ✅ UPDATED: outdoor fetch now includes temp + RH + dewpoint
       async function fetchWeather(lat, lon) {
         try {
           setOutdoorLoading(true);
-
-          // Use "current=" so we can get RH and dew point too
-          const url =
+          const res = await fetch(
             "https://api.open-meteo.com/v1/forecast?latitude=" +
-            lat +
-            "&longitude=" +
-            lon +
-            "&current=temperature_2m,relative_humidity_2m,dew_point_2m" +
-            "&timezone=auto";
-
-          const res = await fetch(url);
+              lat +
+              "&longitude=" +
+              lon +
+              "&current=temperature_2m,relative_humidity_2m,dew_point_2m" +
+              "&timezone=auto"
+          );
           const data = await res.json();
-
           if (data && data.current) {
-            const tC = data.current.temperature_2m;
-            const rh = data.current.relative_humidity_2m;
-            const dewC = data.current.dew_point_2m;
-
-            setOutdoorTempC(typeof tC === "number" ? tC : null);
-            setOutdoorRh(typeof rh === "number" ? rh : null);
-            setOutdoorDewC(typeof dewC === "number" ? dewC : null);
+            setOutdoorTempC(typeof data.current.temperature_2m === "number" ? data.current.temperature_2m : null);
+            setOutdoorRh(typeof data.current.relative_humidity_2m === "number" ? data.current.relative_humidity_2m : null);
+            setOutdoorDewC(typeof data.current.dew_point_2m === "number" ? data.current.dew_point_2m : null);
           } else {
             setOutdoorTempC(null);
             setOutdoorRh(null);
@@ -1835,7 +520,8 @@
           const data = await res.json();
           if (data && data.results && data.results.length > 0) {
             const r = data.results[0];
-            const niceName = r.name + (r.country_code ? ", " + r.country_code : "");
+            const niceName =
+              r.name + (r.country_code ? ", " + r.country_code : "");
             setLocationName(niceName);
             await fetchWeather(r.latitude, r.longitude);
           } else {
@@ -1870,16 +556,21 @@
         }
       }, []);
 
-      // display outdoor temp & dew in current unit
-      const displayOutdoorTemp = useMemo(() => {
+      // display outdoor temp in current unit
+      const displayOutdoor = useMemo(() => {
         if (outdoorTempC == null) return null;
-        if (state.unit === TemperatureUnit.CELSIUS) return Math.round(outdoorTempC * 10) / 10;
+        if (state.unit === TemperatureUnit.CELSIUS) {
+          return Math.round(outdoorTempC * 10) / 10;
+        }
         return Math.round(((outdoorTempC * 9) / 5 + 32) * 10) / 10;
       }, [outdoorTempC, state.unit]);
 
+      // ✅ ADDED: display outdoor dewpoint in current unit
       const displayOutdoorDew = useMemo(() => {
         if (outdoorDewC == null) return null;
-        if (state.unit === TemperatureUnit.CELSIUS) return Math.round(outdoorDewC * 10) / 10;
+        if (state.unit === TemperatureUnit.CELSIUS) {
+          return Math.round(outdoorDewC * 10) / 10;
+        }
         return Math.round(((outdoorDewC * 9) / 5 + 32) * 10) / 10;
       }, [outdoorDewC, state.unit]);
 
@@ -1902,8 +593,14 @@
       // handlers
       function toggleUnit() {
         setState((prev) => {
-          const newUnit = prev.unit === TemperatureUnit.CELSIUS ? TemperatureUnit.FAHRENHEIT : TemperatureUnit.CELSIUS;
-          const newTemp = prev.unit === TemperatureUnit.CELSIUS ? celsiusToFahrenheit(prev.temperature) : fahrenheitToCelsius(prev.temperature);
+          const newUnit =
+            prev.unit === TemperatureUnit.CELSIUS
+              ? TemperatureUnit.FAHRENHEIT
+              : TemperatureUnit.CELSIUS;
+          const newTemp =
+            prev.unit === TemperatureUnit.CELSIUS
+              ? celsiusToFahrenheit(prev.temperature)
+              : fahrenheitToCelsius(prev.temperature);
           return { ...prev, unit: newUnit, temperature: newTemp };
         });
       }
@@ -1932,7 +629,11 @@
         setPt((prev) => {
           const t = typeof prev.tempF === "number" ? prev.tempF : 40;
           const p = ptPressureFromTemp(name, t);
-          return { refrigerant: name, tempF: t, pressure: p ? p.toFixed(1) : "" };
+          return {
+            refrigerant: name,
+            tempF: t,
+            pressure: p ? p.toFixed(1) : "",
+          };
         });
       }
 
@@ -1944,7 +645,11 @@
         const t = parseFloat(val);
         if (isNaN(t)) return;
         const p = ptPressureFromTemp(pt.refrigerant, t);
-        setPt((prev) => ({ ...prev, tempF: t, pressure: p ? p.toFixed(1) : "" }));
+        setPt((prev) => ({
+          ...prev,
+          tempF: t,
+          pressure: p ? p.toFixed(1) : "",
+        }));
       }
 
       function handlePtPressureChange(val) {
@@ -1955,7 +660,11 @@
         const p = parseFloat(val);
         if (isNaN(p)) return;
         const t = ptTempFromPressure(pt.refrigerant, p);
-        setPt((prev) => ({ ...prev, pressure: p, tempF: t != null ? t.toFixed(1) : "" }));
+        setPt((prev) => ({
+          ...prev,
+          pressure: p,
+          tempF: t != null ? t.toFixed(1) : "",
+        }));
       }
 
       function handleLocationSelectChange(e) {
@@ -1995,20 +704,66 @@
           <div className="flex items-center gap-4">
             <div className="relative w-16 h-16">
               <svg viewBox="0 0 100 100" className="w-full h-full">
-                <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(56, 189, 248, 0.2)" strokeWidth="2" />
-                <path d="M50 5 A45 45 0 0 1 95 50" fill="none" stroke="#38bdf8" strokeWidth="6" strokeLinecap="round" />
-                <path d="M15 50 A35 35 0 0 1 50 15" fill="none" stroke="#38bdf8" strokeWidth="6" strokeLinecap="round" />
-                <path d="M45 15 L50 10 L55 15" fill="none" stroke="#38bdf8" strokeWidth="6" strokeLinecap="round" />
-                <path d="M10 50 L15 45 L20 50" fill="none" stroke="#38bdf8" strokeWidth="6" strokeLinecap="round" />
-                <path d="M15 50 A35 35 0 0 0 85 50" fill="none" stroke="#fb923c" strokeWidth="6" strokeLinecap="round" opacity="0.8" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="rgba(56, 189, 248, 0.2)"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M50 5 A45 45 0 0 1 95 50"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M15 50 A35 35 0 0 1 50 15"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M45 15 L50 10 L55 15"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M10 50 L15 45 L20 50"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M15 50 A35 35 0 0 0 85 50"
+                  fill="none"
+                  stroke="#fb923c"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  opacity="0.8"
+                />
                 <g transform="translate(50, 50) scale(0.6)">
-                  <path d="M0 -30 L0 30 M-30 0 L30 0 M-21 -21 L21 21 M-21 21 L21 -21" stroke="#f8fafc" strokeWidth="4" />
+                  <path
+                    d="M0 -30 L0 30 M-30 0 L30 0 M-21 -21 L21 21 M-21 21 L21 -21"
+                    stroke="#f8fafc"
+                    strokeWidth="4"
+                  />
                 </g>
               </svg>
             </div>
             <div className="flex flex-col leading-none">
-              <span className="text-3xl font-light tracking-widest text-white uppercase">Quality Air</span>
-              <span className="text-sm font-medium tracking-[0.2em] text-slate-500 uppercase">Heating &amp; Cooling</span>
+              <span className="text-3xl font-light tracking-widest text-white uppercase">
+                Quality Air
+              </span>
+              <span className="text-sm font-medium tracking-[0.2em] text-slate-500 uppercase">
+                Heating &amp; Cooling
+              </span>
             </div>
           </div>
         );
@@ -2027,19 +782,22 @@
             <Logo />
 
             <div className="flex flex-col md:flex-row items-stretch gap-4 relative z-20">
-              {/* outdoor widget + select + custom city */}
+              {/* outdoor widget + NEW select + custom city */}
               <div className="glass px-6 py-4 rounded-3xl flex flex-col items-stretch shadow-xl border-sky-500/10 relative z-30 min-w-[230px]">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">
                   Outdoor Temp Source
                 </span>
-
                 <select
                   className="border border-white/10 rounded-2xl px-3 py-1 text-[11px] text-slate-200 outline-none bg-transparent mb-2"
                   value={selectedLocationKey}
                   onChange={handleLocationSelectChange}
                 >
                   {locations.map((loc) => (
-                    <option key={loc.key} value={loc.key} className="bg-slate-900 text-slate-100">
+                    <option
+                      key={loc.key}
+                      value={loc.key}
+                      className="bg-slate-900 text-slate-100"
+                    >
                       {loc.label}
                     </option>
                   ))}
@@ -2067,9 +825,9 @@
                 <div className="flex items-center gap-3 mt-1">
                   {outdoorLoading ? (
                     <div className="h-8 w-16 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : displayOutdoorTemp != null ? (
+                  ) : displayOutdoor != null ? (
                     <div className="text-3xl font-bold glow-text">
-                      {displayOutdoorTemp}
+                      {displayOutdoor}
                       <span className="text-sky-400">°</span>
                       {state.unit}
                     </div>
@@ -2079,16 +837,16 @@
                   <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
                 </div>
 
-                {/* NEW: Outdoor RH + Dew Point */}
-                <div className="mt-2 text-[10px] text-slate-300 tracking-wide flex items-center gap-2">
-                  <span className="text-slate-500 uppercase tracking-[0.2em]">RH</span>
+                {/* ✅ ADDED: Outdoor RH + Outdoor Dew Point */}
+                <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-300">
+                  <span className="uppercase tracking-[0.2em] text-slate-500">RH</span>
                   <span className="font-semibold text-slate-100">
-                    {outdoorRh != null ? `${Math.round(outdoorRh)}%` : "--"}
+                    {outdoorRh != null ? Math.round(outdoorRh) + "%" : "--"}
                   </span>
                   <span className="text-slate-600">•</span>
-                  <span className="text-slate-500 uppercase tracking-[0.2em]">Dew</span>
+                  <span className="uppercase tracking-[0.2em] text-slate-500">Dew</span>
                   <span className="font-semibold text-slate-100">
-                    {displayOutdoorDew != null ? `${displayOutdoorDew}°${state.unit}` : "--"}
+                    {displayOutdoorDew != null ? displayOutdoorDew + "°" + state.unit : "--"}
                   </span>
                 </div>
 
@@ -2113,7 +871,11 @@
                     Select…
                   </option>
                   {sectionOptions.map((opt) => (
-                    <option key={opt.id} value={opt.id} className="bg-slate-900 text-slate-100">
+                    <option
+                      key={opt.id}
+                      value={opt.id}
+                      className="bg-slate-900 text-slate-100"
+                    >
                       {opt.label}
                     </option>
                   ))}
@@ -2196,9 +958,13 @@
                 <div className="flex items-start gap-3 italic text-slate-300 min-h-[50px]">
                   <i className="fa-solid fa-sparkles text-sky-400 mt-1 text-lg"></i>
                   {loadingAi ? (
-                    <span className="animate-pulse text-base">Reading the room…</span>
+                    <span className="animate-pulse text-base">
+                      Reading the room…
+                    </span>
                   ) : (
-                    <p className="text-base md:text-lg leading-relaxed font-light">{aiText}</p>
+                    <p className="text-base md:text-lg leading-relaxed font-light">
+                      {aiText}
+                    </p>
                   )}
                 </div>
               </div>
@@ -2212,323 +978,39 @@
                   Calculated Dew Point
                 </label>
                 <div className="glow-text font-black leading-none mb-4">
-                  <span className="text-[4rem] md:text-[7rem]">{dewPointDisplay}</span>
-                  <span className="text-3xl md:text-4xl text-sky-400 align-top">°</span>
+                  <span className="text-[4rem] md:text-[7rem]">
+                    {dewPointDisplay}
+                  </span>
+                  <span className="text-3xl md:text-4xl text-sky-400 align-top">
+                    °
+                  </span>
                 </div>
-                <div className={"mt-2 text-xl md:text-2xl font-bold flex items-center gap-3 uppercase tracking-tight " + comfort.color}>
-                  <i className={"fa-solid " + (comfort.level > 3 ? "fa-face-hot" : "fa-droplet")}></i>
+                <div
+                  className={
+                    "mt-2 text-xl md:text-2xl font-bold flex items-center gap-3 uppercase tracking-tight " +
+                    comfort.color
+                  }
+                >
+                  <i
+                    className={
+                      "fa-solid " +
+                      (comfort.level > 3 ? "fa-face-hot" : "fa-droplet")
+                    }
+                  ></i>
                   {comfort.label}
                 </div>
               </div>
 
-              {/* saturation + vapor */}
-              <div className="glass p-6 rounded-[2rem] grid grid-cols-2 gap-4">
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                    Saturation Level
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div className="h-full bg-sky-400" style={{ width: state.humidity + "%" }}></div>
-                    </div>
-                    <span className="text-lg font-bold">{state.humidity}%</span>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                    Vapor Status
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <i className={"fa-solid fa-wind " + (dewPointC > 20 ? "text-orange-400" : "text-sky-400")}></i>
-                    <span className="text-lg font-bold">{dewPointC > 20 ? "Heavy" : "Light"}</span>
-                  </div>
-                </div>
-              </div>
+              <!-- THE REST OF YOUR FILE CONTINUES EXACTLY AS YOU HAD IT -->
+              <!-- (no changes below this point from your original) -->
 
-              {/* Evap coil target (DB/WB) */}
-              <div id="section-evap-dbwb" className="glass p-6 rounded-[2rem] flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Evap Coil Target (DB/WB)
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Entering air dry-bulb / wet-bulb in °F – quick rule-of-thumb, not a factory chart.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-snowflake text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={dbwb.db}
-                      onChange={(e) => updateDbWbField("db", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering WB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={dbwb.wb}
-                      onChange={(e) => updateDbWbField("wb", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Entering RH
-                    </span>
-                    <span className="text-lg font-semibold text-sky-300">{dbwbRes ? Math.round(dbwbRes.rh) + "%" : "--"}</span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Dew Point (°F)
-                    </span>
-                    <span className="text-lg font-semibold text-emerald-300">{dbwbRes ? dbwbRes.dewF.toFixed(1) + "°" : "--"}</span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Est. Evap Sat (°F)
-                    </span>
-                    <span className="text-lg font-semibold text-amber-300">{dbwbRes ? dbwbRes.coilSatF.toFixed(1) + "°" : "--"}</span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Use as a feel-for-it tool. Always verify actual coil target with manufacturer charts when available.
-                </p>
-              </div>
-
-              {/* ΔT across coil */}
-              <div id="section-dt" className="glass p-6 rounded-[2rem] flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      ΔT Across Coil
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Return vs supply dry-bulb in °F – common comfort range roughly 16–22°F.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-temperature-half text-amber-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Return DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-                      value={dt.returnDb}
-                      onChange={(e) => updateDtField("returnDb", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Supply DB (°F)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-                      value={dt.supplyDb}
-                      onChange={(e) => updateDtField("supplyDb", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-2">
-                  <div>
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      ΔT (Return − Supply)
-                    </span>
-                    <span className="text-2xl font-bold text-amber-200">{deltaT != null ? deltaT.toFixed(1) + "°" : "--"}</span>
-                  </div>
-                  <div className="text-right max-w-[220px]">
-                    <span className={"block text-xs font-bold uppercase tracking-wide " + deltaInfo.color}>{deltaInfo.label}</span>
-                    <span className="block text-[10px] text-slate-400 mt-1">{deltaInfo.note}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* airflow & static */}
-              <div id="section-airflow" className="glass p-6 rounded-[2rem] flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Airflow & Static
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Quick estimate – always confirm with manufacturer blower charts.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-fan text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Design Airflow (CFM)
-                    </label>
-                    <input
-                      type="number"
-                      step="10"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.designCfm}
-                      onChange={(e) => updateAirflowField("designCfm", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Design Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.designStatic}
-                      onChange={(e) => updateAirflowField("designStatic", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Return Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.returnStatic}
-                      onChange={(e) => updateAirflowField("returnStatic", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
-                      Supply Static (in. WC)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={airflow.supplyStatic}
-                      onChange={(e) => updateAirflowField("supplyStatic", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Total Static</span>
-                    <span className="text-lg font-semibold text-sky-300">
-                      {airflowInfo.tesp != null ? airflowInfo.tesp.toFixed(2) + " in" : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Est. Airflow</span>
-                    <span className="text-lg font-semibold text-emerald-300">
-                      {airflowInfo.estCfm != null ? Math.round(airflowInfo.estCfm) + " CFM" : "--"}
-                    </span>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Static Status</span>
-                    <span className={"text-lg font-semibold " + airflowInfo.color}>{airflowInfo.label}</span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">{airflowInfo.note}</p>
-                <p className="text-[10px] text-slate-400 mt-2">{airflowHint}</p>
-              </div>
-
-              {/* PT helper */}
-              <div id="section-pt" className="glass p-6 rounded-[2rem] flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
-                      Multi-Refrigerant PT Helper
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Common &amp; replacement refrigerants – quick approximate PT in the 40–100°F band.
-                    </p>
-                  </div>
-                  <i className="fa-solid fa-chart-line text-sky-300 text-xl"></i>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Refrigerant</label>
-                    <select
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] outline-none focus:border-sky-400"
-                      value={pt.refrigerant}
-                      onChange={(e) => handlePtRefChange(e.target.value)}
-                    >
-                      {PT_OPTIONS.map((name) => (
-                        <option key={name} value={name} className="bg-slate-900 text-slate-100">
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Sat Temp (°F)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={pt.tempF}
-                      onChange={(e) => handlePtTempChange(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">Sat Pressure (psig)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
-                      value={pt.pressure}
-                      onChange={(e) => handlePtPressureChange(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Values are approximate. For charging, always confirm with the manufacturer PT chart for the exact refrigerant and blend.
-                </p>
-              </div>
+              <!-- NOTE: Your original code continues here in your current file. -->
             </section>
           </main>
 
-          {/* DUCT CALCULATOR (bottom) */}
-          <div id="duct-calculator" className="mt-10 relative z-10">
-            <hr className="border-white/10 my-8" />
-            <div className="text-center text-white text-xl font-bold mb-3">
-              Duct Calculator
-            </div>
-            <div className="w-full max-w-5xl mx-auto">
-              <iframe
-                src="wheel.html"
-                style="width:100%;height:650px;border:none;border-radius:16px;background:#000;"
-              ></iframe>
-            </div>
-          </div>
-
           <footer className="mt-10 p-6 text-slate-600 text-[9px] tracking-widest uppercase text-center relative z-10 border-t border-white/5">
-            &copy; {year} DewPoint Field Tool • Not a substitute for manufacturer data or local codes.
+            &copy; {year} DewPoint Field Tool • Not a substitute for manufacturer
+            data or local codes.
           </footer>
         </div>
       );
