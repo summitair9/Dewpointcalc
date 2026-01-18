@@ -206,6 +206,7 @@
 
     // Multi-refrigerant PT curves mapped to base families
     const PT_DATA = {
+      // R-22 / mid-temp HCFC family & close drop-ins
       "R-22": PT_BASE_R22,
       "R-438A / MO99": PT_BASE_R22,
       "R-422D": PT_BASE_R22,
@@ -218,6 +219,7 @@
       "R-424A / RS-44": PT_BASE_R22,
       "R-290 / Propane": PT_BASE_R22,
 
+      // R-410A / high pressure HFC/A2L family
       "R-410A": PT_BASE_R410A,
       "R-32": PT_BASE_R410A,
       "R-454B": PT_BASE_R410A,
@@ -226,6 +228,7 @@
       "R-454C": PT_BASE_R410A,
       "R-466A": PT_BASE_R410A,
 
+      // R-404A / low-temp rack family
       "R-404A": PT_BASE_R404A,
       "R-507A": PT_BASE_R404A,
       "R-448A": PT_BASE_R404A,
@@ -233,14 +236,17 @@
       "R-449B": PT_BASE_R404A,
       "R-452A": PT_BASE_R404A,
 
+      // R-134a / HFO family
       "R-12": PT_BASE_R134A,
       "R-134a": PT_BASE_R134A,
       "R-513A": PT_BASE_R134A,
       "R-1234yf": PT_BASE_R134A,
       "R-1234ze": PT_BASE_R134A,
 
+      // Low pressure chiller & misc – approximate with R-134a band for 40–100°F
       "R-123": PT_BASE_R134A,
 
+      // Naturals
       "R-600a / Isobutane": PT_BASE_R134A,
       "R-717 / Ammonia": PT_BASE_R22,
       "R-744 / CO2": PT_BASE_R744,
@@ -291,7 +297,9 @@
         unit: TemperatureUnit.FAHRENHEIT,
       });
 
-      const [aiText, setAiText] = useState("Adjust the sliders to feel the atmosphere...");
+      const [aiText, setAiText] = useState(
+        "Adjust the sliders to feel the atmosphere..."
+      );
       const [loadingAi, setLoadingAi] = useState(false);
 
       // outdoor temp (from Open-Meteo, stored as °C)
@@ -300,10 +308,6 @@
       const [locationName, setLocationName] = useState("Local");
       const [selectedLocationKey, setSelectedLocationKey] = useState("local");
       const [customCity, setCustomCity] = useState("");
-
-      // ✅ ADDED: outdoor RH + dew (stored as % and °C)
-      const [outdoorRh, setOutdoorRh] = useState(null);
-      const [outdoorDewC, setOutdoorDewC] = useState(null);
 
       const locations = [
         { key: "local", label: "Local (device)", type: "local" },
@@ -455,6 +459,7 @@
         airflow.supplyStatic,
       ]);
 
+      // simple “Airflow vs Charge” hint
       const airflowHint = useMemo(() => {
         if (deltaT == null || airflowInfo.tesp == null) {
           return "Enter ΔT and static to see a quick airflow vs charge hint.";
@@ -477,7 +482,7 @@
         return "Mixed signals – use these numbers as a compass, not a verdict.";
       }, [deltaT, airflowInfo, deltaInfo]);
 
-      // ✅ UPDATED: outdoor fetch now includes temp + RH + dewpoint
+      // outdoor temp fetch
       async function fetchWeather(lat, lon) {
         try {
           setOutdoorLoading(true);
@@ -486,24 +491,14 @@
               lat +
               "&longitude=" +
               lon +
-              "&current=temperature_2m,relative_humidity_2m,dew_point_2m" +
-              "&timezone=auto"
+              "&current_weather=true"
           );
           const data = await res.json();
-          if (data && data.current) {
-            setOutdoorTempC(typeof data.current.temperature_2m === "number" ? data.current.temperature_2m : null);
-            setOutdoorRh(typeof data.current.relative_humidity_2m === "number" ? data.current.relative_humidity_2m : null);
-            setOutdoorDewC(typeof data.current.dew_point_2m === "number" ? data.current.dew_point_2m : null);
-          } else {
-            setOutdoorTempC(null);
-            setOutdoorRh(null);
-            setOutdoorDewC(null);
+          if (data && data.current_weather) {
+            setOutdoorTempC(data.current_weather.temperature);
           }
         } catch (e) {
           console.log("weather error", e);
-          setOutdoorTempC(null);
-          setOutdoorRh(null);
-          setOutdoorDewC(null);
         } finally {
           setOutdoorLoading(false);
         }
@@ -527,14 +522,9 @@
           } else {
             console.log("No geocode result");
             setOutdoorTempC(null);
-            setOutdoorRh(null);
-            setOutdoorDewC(null);
           }
         } catch (e) {
           console.log("geocode error", e);
-          setOutdoorTempC(null);
-          setOutdoorRh(null);
-          setOutdoorDewC(null);
         } finally {
           setOutdoorLoading(false);
         }
@@ -564,15 +554,6 @@
         }
         return Math.round(((outdoorTempC * 9) / 5 + 32) * 10) / 10;
       }, [outdoorTempC, state.unit]);
-
-      // ✅ ADDED: display outdoor dewpoint in current unit
-      const displayOutdoorDew = useMemo(() => {
-        if (outdoorDewC == null) return null;
-        if (state.unit === TemperatureUnit.CELSIUS) {
-          return Math.round(outdoorDewC * 10) / 10;
-        }
-        return Math.round(((outdoorDewC * 9) / 5 + 32) * 10) / 10;
-      }, [outdoorDewC, state.unit]);
 
       // local “AI” text
       useEffect(() => {
@@ -836,20 +817,6 @@
                   )}
                   <i className="fa-solid fa-cloud-sun text-sky-400 text-xl"></i>
                 </div>
-
-                {/* ✅ ADDED: Outdoor RH + Outdoor Dew Point */}
-                <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-300">
-                  <span className="uppercase tracking-[0.2em] text-slate-500">RH</span>
-                  <span className="font-semibold text-slate-100">
-                    {outdoorRh != null ? Math.round(outdoorRh) + "%" : "--"}
-                  </span>
-                  <span className="text-slate-600">•</span>
-                  <span className="uppercase tracking-[0.2em] text-slate-500">Dew</span>
-                  <span className="font-semibold text-slate-100">
-                    {displayOutdoorDew != null ? displayOutdoorDew + "°" + state.unit : "--"}
-                  </span>
-                </div>
-
                 <span className="mt-1 text-[9px] text-slate-500 uppercase tracking-[0.2em]">
                   Currently: {locationName}
                 </span>
@@ -1001,10 +968,378 @@
                 </div>
               </div>
 
-              <!-- THE REST OF YOUR FILE CONTINUES EXACTLY AS YOU HAD IT -->
-              <!-- (no changes below this point from your original) -->
+              {/* saturation + vapor */}
+              <div className="glass p-6 rounded-[2rem] grid grid-cols-2 gap-4">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                    Saturation Level
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-sky-400"
+                        style={{ width: state.humidity + "%" }}
+                      ></div>
+                    </div>
+                    <span className="text-lg font-bold">{state.humidity}%</span>
+                  </div>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                    Vapor Status
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <i
+                      className={
+                        "fa-solid fa-wind " +
+                        (dewPointC > 20 ? "text-orange-400" : "text-sky-400")
+                      }
+                    ></i>
+                    <span className="text-lg font-bold">
+                      {dewPointC > 20 ? "Heavy" : "Light"}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-              <!-- NOTE: Your original code continues here in your current file. -->
+              {/* Evap coil target (DB/WB) */}
+              <div
+                id="section-evap-dbwb"
+                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                      Evap Coil Target (DB/WB)
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Entering air dry-bulb / wet-bulb in °F – quick rule-of-thumb,
+                      not a factory chart.
+                    </p>
+                  </div>
+                  <i className="fa-solid fa-snowflake text-sky-300 text-xl"></i>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Entering DB (°F)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={dbwb.db}
+                      onChange={(e) => updateDbWbField("db", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Entering WB (°F)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={dbwb.wb}
+                      onChange={(e) => updateDbWbField("wb", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Entering RH
+                    </span>
+                    <span className="text-lg font-semibold text-sky-300">
+                      {dbwbRes ? Math.round(dbwbRes.rh) + "%" : "--"}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Dew Point (°F)
+                    </span>
+                    <span className="text-lg font-semibold text-emerald-300">
+                      {dbwbRes ? dbwbRes.dewF.toFixed(1) + "°" : "--"}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Est. Evap Sat (°F)
+                    </span>
+                    <span className="text-lg font-semibold text-amber-300">
+                      {dbwbRes ? dbwbRes.coilSatF.toFixed(1) + "°" : "--"}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Use as a feel-for-it tool. Always verify actual coil target with
+                  manufacturer charts when available.
+                </p>
+              </div>
+
+              {/* ΔT across coil */}
+              <div
+                id="section-dt"
+                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                      ΔT Across Coil
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Return vs supply dry-bulb in °F – common comfort range
+                      roughly 16–22°F.
+                    </p>
+                  </div>
+                  <i className="fa-solid fa-temperature-half text-amber-300 text-xl"></i>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Return DB (°F)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                      value={dt.returnDb}
+                      onChange={(e) => updateDtField("returnDb", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Supply DB (°F)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+                      value={dt.supplyDb}
+                      onChange={(e) => updateDtField("supplyDb", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      ΔT (Return − Supply)
+                    </span>
+                    <span className="text-2xl font-bold text-amber-200">
+                      {deltaT != null ? deltaT.toFixed(1) + "°" : "--"}
+                    </span>
+                  </div>
+                  <div className="text-right max-w-[220px]">
+                    <span
+                      className={
+                        "block text-xs font-bold uppercase tracking-wide " +
+                        deltaInfo.color
+                      }
+                    >
+                      {deltaInfo.label}
+                    </span>
+                    <span className="block text-[10px] text-slate-400 mt-1">
+                      {deltaInfo.note}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* airflow & static */}
+              <div
+                id="section-airflow"
+                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                      Airflow & Static
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Quick estimate – always confirm with manufacturer blower
+                      charts.
+                    </p>
+                  </div>
+                  <i className="fa-solid fa-fan text-sky-300 text-xl"></i>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Design Airflow (CFM)
+                    </label>
+                    <input
+                      type="number"
+                      step="10"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={airflow.designCfm}
+                      onChange={(e) =>
+                        updateAirflowField("designCfm", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Design Static (in. WC)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={airflow.designStatic}
+                      onChange={(e) =>
+                        updateAirflowField("designStatic", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Return Static (in. WC)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={airflow.returnStatic}
+                      onChange={(e) =>
+                        updateAirflowField("returnStatic", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Supply Static (in. WC)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={airflow.supplyStatic}
+                      onChange={(e) =>
+                        updateAirflowField("supplyStatic", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-xs mt-2">
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Total Static
+                    </span>
+                    <span className="text-lg font-semibold text-sky-300">
+                      {airflowInfo.tesp != null
+                        ? airflowInfo.tesp.toFixed(2) + " in"
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Est. Airflow
+                    </span>
+                    <span className="text-lg font-semibold text-emerald-300">
+                      {airflowInfo.estCfm != null
+                        ? Math.round(airflowInfo.estCfm) + " CFM"
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 rounded-2xl px-3 py-2 border border-white/5">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Static Status
+                    </span>
+                    <span
+                      className={
+                        "text-lg font-semibold " + airflowInfo.color
+                      }
+                    >
+                      {airflowInfo.label}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {airflowInfo.note}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  {airflowHint}
+                </p>
+              </div>
+
+              {/* PT helper */}
+              <div
+                id="section-pt"
+                className="glass p-6 rounded-[2rem] flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-widest font-bold mb-1">
+                      Multi-Refrigerant PT Helper
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      Common &amp; replacement refrigerants – quick approximate
+                      PT in the 40–100°F band.
+                    </p>
+                  </div>
+                <i className="fa-solid fa-chart-line text-sky-300 text-xl"></i>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Refrigerant
+                    </label>
+                    <select
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] outline-none focus:border-sky-400"
+                      value={pt.refrigerant}
+                      onChange={(e) => handlePtRefChange(e.target.value)}
+                    >
+                      {PT_OPTIONS.map((name) => (
+                        <option
+                          key={name}
+                          value={name}
+                          className="bg-slate-900 text-slate-100"
+                        >
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Sat Temp (°F)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={pt.tempF}
+                      onChange={(e) => handlePtTempChange(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1 block">
+                      Sat Pressure (psig)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400"
+                      value={pt.pressure}
+                      onChange={(e) => handlePtPressureChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Values are approximate. For charging, always confirm with the
+                  manufacturer PT chart for the exact refrigerant and blend.
+                </p>
+              </div>
             </section>
           </main>
 
